@@ -1,6 +1,7 @@
 #include "graphics/shader/recompiler/backend/spirv/spirvEmitterInstructions.h"
 
 #include "common/logging/log.h"
+#include "graphics/shader/recompiler/ShaderRecompiler.h"
 
 #include <algorithm>
 #include <atomic>
@@ -184,10 +185,29 @@ uint32_t EmitAttribute(EmitterState& state, uint32_t attr, uint32_t chan) {
 			state.builder.AddFunction(spv::OpBitcast, TypeU32(state), bits, value);
 			return bits;
 		}
+		// Fallback for GPUs without VK_KHR_fragment_shader_barycentric (e.g. AMD
+		// RDNA1 / Radeon RX 5500 XT): use flat-shading by taking the first
+		// vertex's value instead of interpolating with barycentric weights. This
+		// keeps the SPIR-V valid (no CapabilityFragmentBarycentricKHR needed) and
+		// lets the emulator boot, at the cost of per-vertex attribute accuracy.
+		if (!ShaderRecompiler::HostSupportsFragmentBarycentric()) {
+			const auto value = load_per_vertex(0u);
+			const auto bits  = state.builder.AllocateId();
+			state.builder.AddFunction(spv::OpBitcast, TypeU32(state), bits, value);
+			return bits;
+		}
 		const auto barycentric_kind = state.input_info.pixel->ps_no_perspective
 		                                  ? IR::StageInputKind::BaryCoordNoPerspective
 		                                  : IR::StageInputKind::BaryCoordSmooth;
 		const auto barycentric      = InputVariableForKind(state, barycentric_kind);
+		// If the barycentric input variable was not declared (e.g. host fallback),
+		// fall back to flat-shading instead of crashing on OpAccessChain(0, ...).
+		if (barycentric == 0) {
+			const auto value = load_per_vertex(0u);
+			const auto bits  = state.builder.AllocateId();
+			state.builder.AddFunction(spv::OpBitcast, TypeU32(state), bits, value);
+			return bits;
+		}
 		uint32_t   sum              = 0;
 		for (uint32_t vertex = 0; vertex < 3u; vertex++) {
 			const auto pointer = state.builder.AllocateId();

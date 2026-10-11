@@ -35,6 +35,12 @@ struct GraphicContext {
 	bool                               provoking_vertex_last_enabled         = false;
 	bool                               depth_color_copy_enabled               = false;
 	bool                               supports_block_texel_view              = false;
+	// When false, the host Vulkan device does not advertise
+	// VK_KHR_fragment_shader_barycentric. The shader recompiler then skips
+	// the SPV_KHR_fragment_shader_barycentric capability and falls back to
+	// flat-shading for per-vertex attribute interpolation. This enables
+	// boot on RDNA1 / older GPUs that lack the extension.
+	bool                               fragment_barycentric_enabled           = false;
 	bool                                      mesh_shader_enabled                   = false;
 	vk::PhysicalDeviceMeshShaderPropertiesEXT mesh_shader_properties                = {};
 	uint32_t                           subgroup_size                         = 0;

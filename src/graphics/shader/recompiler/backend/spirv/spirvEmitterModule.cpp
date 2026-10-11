@@ -1,5 +1,7 @@
 #include "graphics/shader/recompiler/backend/spirv/spirvEmitterInternal.h"
 
+#include "graphics/shader/recompiler/ShaderRecompiler.h"
+
 #include <algorithm>
 #include <bit>
 
@@ -545,6 +547,17 @@ void DefineInputs(EmitterState& state) {
 				break;
 			default: break;
 		}
+		// Skip declaration of BaryCoord* inputs when the host Vulkan device
+		// does not advertise VK_KHR_fragment_shader_barycentric. The emitter's
+		// load helpers (spirvEmitterFlow.cpp) already treat variable_id == 0 as
+		// "input unavailable" and fall back to flat-shading, so the SPIR-V stays
+		// valid without SPV_KHR_fragment_shader_barycentric.
+		if ((input.kind == IR::StageInputKind::BaryCoordSmooth ||
+		     input.kind == IR::StageInputKind::BaryCoordNoPerspective) &&
+		    !ShaderRecompiler::HostSupportsFragmentBarycentric()) {
+			input.variable_id = 0;
+			continue;
+		}
 		input.variable_id =
 		    DefineInterfaceVariable(state, type, spv::StorageClassInput, input.debug_name.c_str());
 		if (input.kind == IR::StageInputKind::Layer || input.kind == IR::StageInputKind::SampleId) {
@@ -785,7 +798,7 @@ void DefineModule(EmitterState& state) {
 		    return input.per_vertex || input.kind == IR::StageInputKind::BaryCoordSmooth ||
 		           input.kind == IR::StageInputKind::BaryCoordNoPerspective;
 	    });
-	if (fragment_barycentric) {
+	if (fragment_barycentric && ShaderRecompiler::HostSupportsFragmentBarycentric()) {
 		state.builder.RequireCapability(spv::CapabilityFragmentBarycentricKHR);
 		state.builder.RequireExtension("SPV_KHR_fragment_shader_barycentric");
 	}

@@ -30,6 +30,12 @@ namespace Libs::Graphics::ShaderRecompiler {
 
 namespace {
 
+// Process-wide host capability flag set by the Vulkan presenter right after
+// vkCreateDevice. Defaults to true so behavior is unchanged on GPUs that
+// support VK_KHR_fragment_shader_barycentric (i.e. everything except RDNA1 /
+// older AMD parts such as the Radeon RX 5500 XT).
+bool g_host_supports_fragment_barycentric = true;
+
 const char* GetDumpLabel(const CompileOptions& options) {
 	return options.dump_label != nullptr ? options.dump_label : "ShaderRecompiler";
 }
@@ -901,6 +907,14 @@ CompileResult CompileProgram(TranslateResult translated, const CompileOptions& o
 		result.ir_dump      = std::move(ir_dump);
 	}
 	return result;
+}
+
+void SetHostSupportsFragmentBarycentric(bool enabled) {
+	g_host_supports_fragment_barycentric = enabled;
+}
+
+bool HostSupportsFragmentBarycentric() {
+	return g_host_supports_fragment_barycentric;
 }
 
 } // namespace Libs::Graphics::ShaderRecompiler

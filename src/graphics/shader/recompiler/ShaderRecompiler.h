@@ -60,6 +60,21 @@ struct ShaderSource {
 	std::vector<std::pair<uint64_t, uint64_t>> reads;
 };
 
+// Host capability flags read by the SPIR-V backend at shader compile time.
+// These are set ONCE by the Vulkan presenter right after the logical device is
+// created and must remain stable for the lifetime of the process, because they
+// affect the SPIR-V emitted for cached shaders.
+//
+// `host_supports_fragment_barycentric` controls whether the SPIR-V backend is
+// allowed to emit SPV_KHR_fragment_shader_barycentric. When the host Vulkan
+// device does not advertise VK_KHR_fragment_shader_barycentric (e.g. AMD RDNA1
+// GPUs such as the Radeon RX 5500 XT), the recompiler skips the capability and
+// falls back to flat-shading for per-vertex attribute interpolation, which lets
+// the emulator boot on otherwise-incompatible hardware at the cost of minor
+// visual glitches in games that rely on barycentric weights.
+void SetHostSupportsFragmentBarycentric(bool enabled);
+bool HostSupportsFragmentBarycentric();
+
 [[nodiscard]] ShaderSource PrepareShaderSource(std::span<const uint32_t> code,
 	                                           const CompileOptions& options);
 const Decoder::Program& RefreshShaderSource(ShaderSource& source, const IR::SrtRuntime& runtime);
