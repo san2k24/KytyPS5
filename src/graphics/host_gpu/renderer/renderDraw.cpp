@@ -888,6 +888,12 @@ static void RefreshShaders(CommandBuffer& buffer, const DrawCallInfo& draw,
 	state.programs = pipeline_cache.GetGraphicsPrograms(
 	    vertex_shader_info, pixel_shader_info, shader_regs, ctx, buffer.GetUserConfig(),
 	    target_export_mapping, state.ps_active, state.vertex_info, state.ps_input_info);
+	// Skip draws that the host GPU can't run (e.g. mesh shader draws on
+	// RDNA1 GPUs that lack VK_EXT_mesh_shader). GetGraphicsPrograms
+	// returns an empty GraphicsPrograms in that case.
+	if (!state.programs.vertex[0]) {
+		return;
+	}
 }
 
 bool RenderExecutor::PrepareDrawRenderState(CommandBuffer& buffer, const DrawCallInfo& draw,
@@ -899,6 +905,13 @@ bool RenderExecutor::PrepareDrawRenderState(CommandBuffer& buffer, const DrawCal
 	                  (color_output_mask != 0 ||
 	                   PixelShaderHasDepthOrCoverageSideEffects(shader_regs));
 	RefreshShaders(buffer, draw, color_output_mask, state);
+	// RefreshShaders sets an empty programs.vertex[0] when the host GPU
+	// cannot run the draw (e.g. mesh shader draw on RDNA1 GPUs without
+	// VK_EXT_mesh_shader). Skip the rest of the prepare phase so the draw
+	// is dropped cleanly instead of faulting on a null program pointer.
+	if (!state.programs.vertex[0]) {
+		return false;
+	}
 	uint32_t mrt_mask = 0;
 	if (state.ps_active) {
 		for (const auto& output: state.ps_input_info.stage.program->info.outputs) {

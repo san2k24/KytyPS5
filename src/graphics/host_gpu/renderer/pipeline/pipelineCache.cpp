@@ -665,7 +665,20 @@ PipelineCache::GraphicsPrograms PipelineCache::GetGraphicsPrograms(
 	}
 	const bool mesh_active = vertex_info[0].logical_stage == ShaderType::Mesh;
 	if (mesh_active) {
-		EXIT_NOT_IMPLEMENTED(!m_graphics.mesh_shader_enabled);
+		// Mesh shaders require VK_EXT_mesh_shader, which is missing on
+		// AMD RDNA1 (Radeon RX 5000 series) and other older GPUs. Instead
+		// of crashing the emulator, return an empty GraphicsPrograms so
+		// the caller (PrepareDrawRenderState) skips this draw.
+		// Games that rely on mesh shaders will not render those draws,
+		// but the rest of the frame continues normally.
+		if (!m_graphics.mesh_shader_enabled) {
+			static std::atomic_bool mesh_warned = false;
+			if (!mesh_warned.exchange(true, std::memory_order_relaxed)) {
+				LOGF("Mesh shader draw skipped: VK_EXT_mesh_shader is not supported "
+				     "on this GPU; draws using mesh shaders will not render\n");
+			}
+			return GraphicsPrograms {};
+		}
 		auto& mesh              = vertex_info[0].mesh;
 		mesh.host_subgroup_size = m_graphics.subgroup_size;
 		const auto& limits      = m_graphics.mesh_shader_properties;
