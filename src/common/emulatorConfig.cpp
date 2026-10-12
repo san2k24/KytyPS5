@@ -120,11 +120,14 @@ uint32_t GetMaxQueuedFrames() {
 }
 
 const std::string& GetAudioOutputDevice() {
-        return g_config->audio_output_device;
+        // Null-safe: unit tests exercise the audio paths without initializing
+        // the Config subsystem.
+        static const std::string empty;
+        return g_config != nullptr ? g_config->audio_output_device : empty;
 }
 
 uint32_t GetMasterVolume() {
-        return std::clamp(g_config->master_volume, 0u, 200u);
+        return g_config != nullptr ? std::clamp(g_config->master_volume, 0u, 200u) : 100u;
 }
 
 bool ShaderCacheEnabled() {
