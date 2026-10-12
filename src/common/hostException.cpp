@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <cstdio>
-#include <cstring>
 
 #if KYTY_PLATFORM == KYTY_PLATFORM_WINDOWS
 #include <windows.h> // IWYU pragma: keep
@@ -114,114 +113,6 @@ static LONG WINAPI ExceptionFilter(PEXCEPTION_POINTERS exception) noexcept {
 		info.type = ExceptionType::IllegalInstruction;
 	} else {
 		return EXCEPTION_CONTINUE_SEARCH;
-	}
-
-	// Null-page recovery: when the guest shader walker or a C runtime helper
-	// dereferences a null+small-offset pointer (typically an uninitialised
-	// descriptor table, a stale SRT pointer, or a null STL container),
-	// instead of crashing the emulator, redirect the faulting base register
-	// to a static 64 KB page of zeros and resume execution. The faulting
-	// instruction then reads 0 instead of crashing, and the caller proceeds
-	// (typically with degraded visuals or skipped draw, but never a hard
-	// EXIT). A per-PC counter prevents infinite loops: each unique RIP is
-	// allowed at most 1024 null-page recoveries before we give up and let
-	// the KytyPS5 dump handler print and exit.
-	if (info.type == ExceptionType::AccessViolation &&
-	    info.access_violation_vaddr < 0x10000ull) {
-		static uint8_t* zero_page = []() -> uint8_t* {
-			auto* p = static_cast<uint8_t*>(::VirtualAlloc(nullptr, 65536,
-			                                    MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
-			if (p != nullptr) {
-				std::memset(p, 0, 65536);
-			}
-			return p;
-		}();
-		if (zero_page != nullptr) {
-			static std::atomic<uint32_t> recovery_count_per_rip[256] = {};
-			const uint64_t fault_rip = info.exception_address;
-			const size_t bucket = (fault_rip >> 4) & 0xFF;
-			const uint32_t prev = recovery_count_per_rip[bucket].fetch_add(1,
-			                                                       std::memory_order_relaxed);
-			if (prev < 1024) {
-				// Decode the faulting instruction at RIP to find the base
-				// register used for the memory access. Most null-deref
-				// faulting instructions in vcruntime / KytyPS5 are of the
-				// form [reg+offset] or [reg+reg*scale+disp].
-				const uint8_t* code = reinterpret_cast<const uint8_t*>(
-				    info.exception_address);
-				size_t i = 0;
-				// Skip legacy prefixes (segment overrides, LOCK, REP, etc).
-				while (i < 15 && (code[i] == 0x26 || code[i] == 0x2e ||
-				                   code[i] == 0x36 || code[i] == 0x3e ||
-				                   code[i] == 0x64 || code[i] == 0x65 ||
-				                   code[i] == 0x66 || code[i] == 0x67 ||
-				                   code[i] == 0xf0 || code[i] == 0xf2 ||
-				                   code[i] == 0xf3)) {
-					i++;
-				}
-				uint8_t rex = 0;
-				if (i < 15 && (code[i] & 0xF0) == 0x40) {
-					rex = code[i++];
-				}
-				const bool rex_b = (rex & 0x01) != 0;  // extends rm
-				const bool rex_x = (rex & 0x02) != 0;
-				const bool rex_r = (rex & 0x04) != 0;
-				const bool rex_w = (rex & 0x08) != 0;
-				(void)rex_x; (void)rex_r; (void)rex_w;
-				if (i < 15) {
-					const uint8_t opcode = code[i++];
-					(void)opcode;
-					if (i < 15) {
-						const uint8_t modrm = code[i];
-						const uint8_t mod = (modrm >> 6) & 0x03;
-						const uint8_t rm  = modrm & 0x07;
-						if (mod != 0x03) {  // memory operand (not register-direct)
-							if (mod == 0x00 && rm == 0x05) {
-								// RIP-relative addressing — no base reg to patch.
-								// Skip recovery.
-							} else if (mod == 0x00 && rm == 0x04) {
-								// SIB byte follows — base is in SIB.base.
-								if (i + 1 < 15) {
-									const uint8_t sib = code[i + 1];
-									uint8_t base = sib & 0x07;
-									bool base_extended = rex_b;
-									if (base == 0x05) {
-										// disp32 base — no register to patch.
-									} else {
-										auto* ctx = exception->ContextRecord;
-										uint8_t reg_idx = base | (base_extended ? 0x08 : 0x00);
-										uint64_t* regs[] = {
-											&ctx->Rax, &ctx->Rcx, &ctx->Rdx, &ctx->Rbx,
-											&ctx->Rsp, &ctx->Rbp, &ctx->Rsi, &ctx->Rdi,
-											&ctx->R8,  &ctx->R9,  &ctx->R10, &ctx->R11,
-											&ctx->R12, &ctx->R13, &ctx->R14, &ctx->R15,
-										};
-										if (reg_idx < 16) {
-											*regs[reg_idx] = reinterpret_cast<DWORD64>(zero_page);
-											return EXCEPTION_CONTINUE_EXECUTION;
-										}
-									}
-								}
-							}
-						} else {
-							// rm field (with optional REX.B extension) is the base.
-							auto* ctx = exception->ContextRecord;
-							uint8_t reg_idx = rm | (rex_b ? 0x08 : 0x00);
-							uint64_t* regs[] = {
-								&ctx->Rax, &ctx->Rcx, &ctx->Rdx, &ctx->Rbx,
-								&ctx->Rsp, &ctx->Rbp, &ctx->Rsi, &ctx->Rdi,
-								&ctx->R8,  &ctx->R9,  &ctx->R10, &ctx->R11,
-								&ctx->R12, &ctx->R13, &ctx->R14, &ctx->R15,
-							};
-							if (reg_idx < 16) {
-								*regs[reg_idx] = reinterpret_cast<DWORD64>(zero_page);
-								return EXCEPTION_CONTINUE_EXECUTION;
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 
 	info.rax = exception->ContextRecord->Rax;
