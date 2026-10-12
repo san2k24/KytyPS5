@@ -92,6 +92,10 @@ uint32_t GetVblankFrequency() {
 	return std::clamp(g_config->vblank_frequency, 30u, 360u);
 }
 
+bool VblankCatchupEnabled() {
+	return g_config->vblank_catchup_enabled;
+}
+
 uint32_t GetConsoleLanguage() {
 	return g_config->console_language;
 }

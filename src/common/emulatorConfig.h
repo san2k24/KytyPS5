@@ -59,6 +59,13 @@ struct ConfigOptions {
 	bool                   vr_enabled                  = false;
 	bool                   amd_cpu_enabled             = false;
 	uint32_t               vblank_frequency            = 60;
+	// When true, the present thread fires additional vblank events to keep
+	// game logic at the configured vblank_frequency even if the host GPU
+	// cannot render at that rate. This prevents the 'slow motion below 60
+	// FPS' behavior at the cost of dropped rendered frames (visuals become
+	// choppy but the game runs at the correct speed). Default ON for forks
+	// targeting GPUs below PS5 spec (e.g. AMD RDNA1 / Radeon RX 5500 XT).
+	bool                   vblank_catchup_enabled       = true;
 	uint32_t               console_language            = DEFAULT_CONSOLE_LANGUAGE;
 	bool                   vulkan_validation_enabled   = false;
 	bool                   shader_validation_enabled   = false;
@@ -106,6 +113,7 @@ bool     HideCursorEnabled();
 bool     VrEnabled();
 bool     AmdCpuEnabled();
 uint32_t GetVblankFrequency();
+bool     VblankCatchupEnabled();
 uint32_t GetConsoleLanguage();
 bool     VulkanValidationEnabled();
 

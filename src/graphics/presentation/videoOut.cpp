@@ -869,6 +869,21 @@ void VideoOutDriver::Impl::PresentThread(std::stop_token token) {
 			continue;
 		}
 
+		// Catch-up vblanks: when the host GPU is rendering below the
+		// configured vblank frequency, fire additional vblank events so
+		// game logic (physics, audio, animations) advances at the correct
+		// rate even though some frames are not rendered. This prevents the
+		// 'slow motion below 60 FPS' behavior on slower GPUs (e.g. AMD
+		// RDNA1 / Radeon RX 5500 XT). The catch-up vblanks are fired before
+		// the main vblank (which includes rendering) so the most recent
+		// submitted frame is the one that gets rendered.
+		if (Config::VblankCatchupEnabled()) {
+			while (total_wait <= -static_cast<int64_t>(period)) {
+				VblankBegin();
+				VblankEnd();
+				total_wait += static_cast<int64_t>(period);
+			}
+		}
 		VblankBegin();
 		bool presented = m_flip_queue.Flip(0);
 		if (!presented && m_presenter.NeedsSystemOverlayRefresh()) {
