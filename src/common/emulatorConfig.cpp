@@ -10,200 +10,227 @@ namespace Config {
 static std::unique_ptr<ConfigOptions> g_config;
 
 void Initialize() {
-	EXIT_IF(g_config != nullptr);
+        EXIT_IF(g_config != nullptr);
 
-	g_config = std::make_unique<ConfigOptions>();
+        g_config = std::make_unique<ConfigOptions>();
 }
 
 void Shutdown() {
-	g_config.reset();
+        g_config.reset();
 }
 
 void Load(const ConfigOptions& cfg) {
-	EXIT_IF(g_config == nullptr);
-	EXIT_IF(cfg.user_name.empty() || cfg.user_name.size() > MAX_USER_NAME_LENGTH);
-	EXIT_IF(!IsConfiguredUserIdValid(cfg.user_id));
-	EXIT_IF(cfg.controller_speaker_volume > 100 || cfg.controller_vibration_intensity > 100);
+        EXIT_IF(g_config == nullptr);
+        EXIT_IF(cfg.user_name.empty() || cfg.user_name.size() > MAX_USER_NAME_LENGTH);
+        EXIT_IF(!IsConfiguredUserIdValid(cfg.user_id));
+        EXIT_IF(cfg.controller_speaker_volume > 100 || cfg.controller_vibration_intensity > 100);
 
-	*g_config = cfg;
+        *g_config = cfg;
 }
 
 uint32_t GetScreenWidth() {
-	return g_config->screen_width;
+        return g_config->screen_width;
 }
 
 uint32_t GetScreenHeight() {
-	return g_config->screen_height;
+        return g_config->screen_height;
 }
 
 const std::string& GetUserName() {
-	return g_config->user_name;
+        return g_config->user_name;
 }
 
 int32_t GetUserId() {
-	return g_config->user_id;
+        return g_config->user_id;
 }
 
 const std::string& GetAudioInputDevice() {
-	return g_config->audio_input_device;
+        return g_config->audio_input_device;
 }
 
 const std::optional<ControllerColor>& GetControllerColor() {
-	return g_config->controller_color;
+        return g_config->controller_color;
 }
 
 uint32_t GetControllerSpeakerVolume() {
-	return g_config->controller_speaker_volume;
+        return g_config->controller_speaker_volume;
 }
 
 uint32_t GetControllerVibrationIntensity() {
-	return g_config->controller_vibration_intensity;
+        return g_config->controller_vibration_intensity;
 }
 
 PresentMode GetPresentMode() {
-	return g_config->present_mode;
+        return g_config->present_mode;
 }
 
 int32_t GetGpuIndex() {
-	return g_config->gpu_index;
+        return g_config->gpu_index;
 }
 
 bool FullscreenEnabled() {
-	return g_config->fullscreen_enabled;
+        return g_config->fullscreen_enabled;
 }
 
 bool HdrEnabled() {
-	return g_config->hdr_enabled;
+        return g_config->hdr_enabled;
 }
 
 bool HideCursorEnabled() {
-	return g_config->hide_cursor_enabled;
+        return g_config->hide_cursor_enabled;
 }
 
 bool VrEnabled() {
-	return g_config->vr_enabled;
+        return g_config->vr_enabled;
 }
 
 bool AmdCpuEnabled() {
-	return g_config->amd_cpu_enabled;
+        return g_config->amd_cpu_enabled;
 }
 
 uint32_t GetVblankFrequency() {
-	return std::clamp(g_config->vblank_frequency, 30u, 360u);
+        return std::clamp(g_config->vblank_frequency, 30u, 360u);
 }
 
 bool VblankCatchupEnabled() {
-	return g_config->vblank_catchup_enabled;
+        return g_config->vblank_catchup_enabled;
 }
 
 const std::string& GetUpscalingFilter() {
-	return g_config->upscaling_filter;
+        return g_config->upscaling_filter;
 }
 
 bool Speed2xEnabled() {
-	return g_config->speed_2x_enabled;
+        return g_config->speed_2x_enabled;
 }
 
 uint32_t GetFrameSkipCount() {
-	return std::clamp(g_config->frame_skip_count, 1u, 10u);
+        return std::clamp(g_config->frame_skip_count, 1u, 10u);
+}
+
+const std::string& GetAspectRatio() {
+        return g_config->aspect_ratio;
+}
+
+uint32_t GetMaxQueuedFrames() {
+        return g_config->max_queued_frames == 0 || (g_config->max_queued_frames >= 2u &&
+                                                    g_config->max_queued_frames <= 4u)
+                   ? g_config->max_queued_frames
+                   : 0u;
+}
+
+const std::string& GetAudioOutputDevice() {
+        return g_config->audio_output_device;
+}
+
+uint32_t GetMasterVolume() {
+        return std::clamp(g_config->master_volume, 0u, 200u);
+}
+
+bool ShaderCacheEnabled() {
+        return g_config->shader_cache_enabled;
+}
+
+const std::string& GetCpuAffinity() {
+        return g_config->cpu_affinity;
 }
 
 uint32_t GetConsoleLanguage() {
-	return g_config->console_language;
+        return g_config->console_language;
 }
 
 bool VulkanValidationEnabled() {
-	return g_config->vulkan_validation_enabled;
+        return g_config->vulkan_validation_enabled;
 }
 
 bool ShaderValidationEnabled() {
-	return g_config->shader_validation_enabled;
+        return g_config->shader_validation_enabled;
 }
 
 ShaderOptimizationType GetShaderOptimizationType() {
-	return g_config->shader_optimization_type;
+        return g_config->shader_optimization_type;
 }
 
 LogDirection GetShaderLogDirection() {
-	return g_config->shader_log_direction;
+        return g_config->shader_log_direction;
 }
 
 std::filesystem::path GetShaderLogFolder() {
-	return g_config->shader_log_folder;
+        return g_config->shader_log_folder;
 }
 
 bool CommandBufferDumpEnabled() {
-	return g_config->command_buffer_dump_enabled;
+        return g_config->command_buffer_dump_enabled;
 }
 
 std::filesystem::path GetCommandBufferDumpFolder() {
-	return g_config->command_buffer_dump_folder;
+        return g_config->command_buffer_dump_folder;
 }
 
 bool GraphicsDebugDumpEnabled() {
-	return g_config->graphics_debug_dump_enabled;
+        return g_config->graphics_debug_dump_enabled;
 }
 
 LogDirection GetPrintfDirection() {
-	return g_config->printf_direction;
+        return g_config->printf_direction;
 }
 
 std::filesystem::path GetPrintfOutputFile() {
-	return g_config->printf_output_file;
+        return g_config->printf_output_file;
 }
 
 bool ProfilerEnabled() {
-	return g_config->profiler_enabled;
+        return g_config->profiler_enabled;
 }
 
 bool SpirvDebugPrintfEnabled() {
-	return g_config->spirv_debug_printf_enabled;
+        return g_config->spirv_debug_printf_enabled;
 }
 
 bool GpuAssistedValidationEnabled() {
-	return g_config->gpu_assisted_validation_enabled && g_config->vulkan_validation_enabled;
+        return g_config->gpu_assisted_validation_enabled && g_config->vulkan_validation_enabled;
 }
 
 bool RenderDocEnabled() {
-	return g_config->renderdoc_enabled;
+        return g_config->renderdoc_enabled;
 }
 
 bool ReadbackLinearImagesEnabled() {
-	return g_config->readback_linear_images;
+        return g_config->readback_linear_images;
 }
 
 bool SyncRawImageBuffersEnabled() {
-	return g_config->sync_raw_image_buffers;
+        return g_config->sync_raw_image_buffers;
 }
 
 bool TessellationEnabled() {
-	return g_config->tessellation_enabled;
+        return g_config->tessellation_enabled;
 }
 
 bool TrophyEnabled() {
-	return g_config->trophy_enabled;
+        return g_config->trophy_enabled;
 }
 
 bool PlayGoHackEnabled() {
-	return g_config->playgo_hack_enabled;
+        return g_config->playgo_hack_enabled;
 }
 
 bool SkipNoticeScreen() {
-	return g_config->skip_notice_screen;
+        return g_config->skip_notice_screen;
 }
 
 #if KYTY_PLATFORM == KYTY_PLATFORM_WINDOWS
 bool RedZoneProtectionEnabled() {
-	return g_config->red_zone_protection_enabled;
+        return g_config->red_zone_protection_enabled;
 }
 #endif
 
 const Keymap& GetKeymap() {
-	return g_config->keymap;
+        return g_config->keymap;
 }
 
 const std::vector<std::string>& GetGuestArguments() {
-	return g_config->guest_arguments;
+        return g_config->guest_arguments;
 }
 
 } // namespace Config
