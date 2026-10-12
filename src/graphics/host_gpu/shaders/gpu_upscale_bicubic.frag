@@ -38,12 +38,13 @@ vec4 sample_bicubic(sampler2D tex, vec2 tex_coord) {
         vec4 result = vec4(0.0);
         for (int row = 0; row < 4; row++) {
                 const float y_off = (float(row) - 1.0) * step.y;
-                const vec4  taps  = vec4(texture(tex, base + vec2(-step.x, y_off)),
-                                 texture(tex, base + vec2(0.0, y_off)),
-                                 texture(tex, base + vec2(step.x, y_off)),
-                                 texture(tex, base + vec2(2.0 * step.x, y_off)));
+                const vec2  row_uv = base + vec2(0.0, y_off);
                 // Weighted row sum: dot of horizontal weights with the four taps.
-                result += taps * wx * wy[row];
+                const vec4 c0 = texture(tex, row_uv + vec2(-step.x, 0.0));
+                const vec4 c1 = texture(tex, row_uv);
+                const vec4 c2 = texture(tex, row_uv + vec2(step.x, 0.0));
+                const vec4 c3 = texture(tex, row_uv + vec2(2.0 * step.x, 0.0));
+                result += (c0 * wx.x + c1 * wx.y + c2 * wx.z + c3 * wx.w) * wy[row];
         }
         return result;
 }

@@ -13,16 +13,17 @@
 #version 460 core
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
+#extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_explicit_arithmetic_types : require
 
 // Const0..Const3 hold the FsrEasuCon() constants; Const4.xy is the size of the
 // destination (letterboxed) viewport in pixels.
 layout(push_constant) uniform constants {
-	uvec4 Const0;
-	uvec4 Const1;
-	uvec4 Const2;
-	uvec4 Const3;
-	uvec4 Const4;
+        uvec4 Const0;
+        uvec4 Const1;
+        uvec4 Const2;
+        uvec4 Const3;
+        uvec4 Const4;
 };
 
 layout(set = 0, binding = 0) uniform sampler2D source;
@@ -43,9 +44,9 @@ layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 color;
 
 void main() {
-	// uv spans the letterboxed destination viewport, so uv * dst_size yields
-	// the output pixel position (at pixel centers) EASU expects.
-	AF3 c;
-	FsrEasuF(c, AU2(uv * vec2(Const4.xy)), Const0, Const1, Const2, Const3);
-	color = vec4(c, texture(source, uv).a);
+        // uv spans the letterboxed destination viewport, so uv * dst_size yields
+        // the output pixel position (at pixel centers) EASU expects.
+        AF3 c;
+        FsrEasuF(c, AU2(uv * vec2(Const4.xy)), Const0, Const1, Const2, Const3);
+        color = vec4(c, texture(source, uv).a);
 }
