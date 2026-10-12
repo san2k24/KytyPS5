@@ -1002,9 +1002,10 @@ void Swapchain::RecordPresentCommands(CommandBuffer& command, Presenter::Frame* 
             source != nullptr &&
             (filter == "fsr" || filter == "scaleforce" || filter == "bicubic");
         m_present_uses_graphics = upscale_shader;
-        const auto present_rect = source != nullptr
-                                      ? ComputePresentRect(source->image.extent)
-                                      : vk::Rect2D {{0, 0}, m_extent};
+        const auto present_rect =
+            source != nullptr
+                ? ComputePresentRect(vk::Extent2D {source->image.extent.width, source->image.extent.height})
+                : vk::Rect2D {{0, 0}, m_extent};
         if (source != nullptr) {
                 source->Transit(vk_command,
                                 upscale_shader ? vk::ImageLayout::eShaderReadOnlyOptimal
