@@ -21,6 +21,7 @@ QVariantMap Configuration::GameSettings() const {
 	KYTY_CFG_SET(vblank_catchup_enabled);
 	KYTY_CFG_SET(speed_2x_enabled);
 	KYTY_CFG_SET(frame_skip_count);
+	KYTY_CFG_SET(upscaling_filter);
 	KYTY_CFG_SET(console_language);
 	KYTY_CFG_SET(vulkan_validation_enabled);
 	KYTY_CFG_SET(shader_validation_enabled);
@@ -72,6 +73,11 @@ void Configuration::ReadGameSettingsValues(const Settings& s) {
 	frame_skip_count = s.value("frame_skip_count", frame_skip_count).toInt();
 	if (frame_skip_count < 1 || frame_skip_count > 10) {
 		frame_skip_count = 1;
+	}
+	upscaling_filter = s.value("upscaling_filter", upscaling_filter).toString();
+	if (upscaling_filter != "nearest" && upscaling_filter != "bilinear" &&
+	    upscaling_filter != "bicubic" && upscaling_filter != "integer") {
+		upscaling_filter = "bilinear";
 	}
 	console_language = s.value("console_language", console_language).toInt();
 	if (console_language < 0 || console_language > MAX_CONSOLE_LANGUAGE) {

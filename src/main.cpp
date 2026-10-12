@@ -68,6 +68,10 @@ static void PrintUsage() {
 	::printf("  --vr                                 Enable the virtual VR headset.\n");
 	::printf("  --amd-cpu                            Apply AMD CPU instruction patches.\n");
 	::printf("  --vblank-frequency <num>             Virtual vblank frequency. Default: 60.\n");
+	::printf("  --vblank-catchup <true|false>        Fire catch-up vblanks when host FPS drops. Default: true.\n");
+	::printf("  --speed-2x <true|false>              Run game at 2x speed (PPSSPP fast-forward). Default: false.\n");
+	::printf("  --frame-skip <1-10>                  Max vblanks fired per rendered frame. Default: 1.\n");
+	::printf("  --upscaling-filter <filter>         nearest, bilinear, bicubic, or integer. Default: bilinear.\n");
 	::printf("  --console-language <0-29>            Console language. Default: 1 (English US).\n");
 	::printf("  --vulkan-validation <true|false>     Enable Vulkan validation.\n");
 	::printf("  --gpu-assisted-validation <t|f>      Bounds-check shader accesses on the GPU.\n"
@@ -381,6 +385,34 @@ static bool ParseArgs(int argc, char* argv[], RunOptions& options, bool& show_he
 		} else if (arg == "--vblank-frequency") {
 			if (!ParseUint32(value, options.config.vblank_frequency)) {
 				::printf("invalid vblank frequency: %s\n", value.c_str());
+				return false;
+			}
+		} else if (arg == "--vblank-catchup") {
+			bool v = false;
+			if (!ParseBool(value, v)) {
+				::printf("invalid vblank-catchup: %s\n", value.c_str());
+				return false;
+			}
+			options.config.vblank_catchup_enabled = v;
+		} else if (arg == "--speed-2x") {
+			bool v = false;
+			if (!ParseBool(value, v)) {
+				::printf("invalid speed-2x: %s\n", value.c_str());
+				return false;
+			}
+			options.config.speed_2x_enabled = v;
+		} else if (arg == "--frame-skip") {
+			uint32_t n = 0;
+			if (!ParseUint32(value, n) || n < 1 || n > 10) {
+				::printf("invalid frame-skip: %s\n", value.c_str());
+				return false;
+			}
+			options.config.frame_skip_count = n;
+		} else if (arg == "--upscaling-filter") {
+			if (value == "nearest" || value == "bilinear" || value == "bicubic" || value == "integer") {
+				options.config.upscaling_filter = value;
+			} else {
+				::printf("invalid upscaling-filter: %s\n", value.c_str());
 				return false;
 			}
 		} else if (arg == "--console-language") {

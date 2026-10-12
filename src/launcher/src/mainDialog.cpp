@@ -259,6 +259,10 @@ static QStringList CreateEmulatorArgs(const Configuration& info) {
 		args << "--tessellation";
 	}
 	args << "--vblank-frequency" << QString::number(info.vblank_frequency);
+	args << "--vblank-catchup" << BoolArg(info.vblank_catchup_enabled);
+	args << "--speed-2x" << BoolArg(info.speed_2x_enabled);
+	args << "--frame-skip" << QString::number(info.frame_skip_count);
+	args << "--upscaling-filter" << info.upscaling_filter;
 	args << "--console-language" << QString::number(info.console_language);
 	args << "--vulkan-validation" << BoolArg(info.vulkan_validation_enabled);
 	args << "--shader-validation" << BoolArg(info.shader_validation_enabled);

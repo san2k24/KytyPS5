@@ -96,6 +96,10 @@ bool VblankCatchupEnabled() {
 	return g_config->vblank_catchup_enabled;
 }
 
+const std::string& GetUpscalingFilter() {
+	return g_config->upscaling_filter;
+}
+
 bool Speed2xEnabled() {
 	return g_config->speed_2x_enabled;
 }

@@ -117,6 +117,19 @@
             <item row="0" column="1">
              <widget class="QComboBox" name="comboBox_screen_resolution">
               <property name="toolTip"><string>Window resolution</string></property>
+              <item><property name="text"><string>1280x720 (720p)</string></property></item>
+              <item><property name="text"><string>1600x900 (900p)</string></property></item>
+              <item><property name="text"><string>1920x1080 (1080p)</string></property></item>
+              <item><property name="text"><string>2560x1440 (1440p)</string></property></item>
+              <item><property name="text"><string>3200x1800 (1800p)</string></property></item>
+              <item><property name="text"><string>3840x2160 (4K)</string></property></item>
+              <item><property name="text"><string>5120x2880 (5K)</string></property></item>
+              <item><property name="text"><string>1024x768 (4:3)</string></property></item>
+              <item><property name="text"><string>1366x768 (laptop)</string></property></item>
+              <item><property name="text"><string>1680x1050 (16:10)</string></property></item>
+              <item><property name="text"><string>2560x1080 (21:9)</string></property></item>
+              <item><property name="text"><string>3440x1440 (ultrawide)</string></property></item>
+              <item><property name="text"><string>5120x1440 (superwide)</string></property></item>
              </widget>
             </item>
             <item row="1" column="0">
@@ -179,6 +192,20 @@
               <property name="minimum"><number>1</number></property>
               <property name="maximum"><number>10</number></property>
               <property name="value"><number>1</number></property>
+             </widget>
+            </item>
+            <item row="6" column="0">
+             <widget class="QLabel" name="label_upscaling_filter">
+              <property name="text"><string>Upscaling filter:</string></property>
+             </widget>
+            </item>
+            <item row="6" column="1">
+             <widget class="QComboBox" name="comboBox_upscaling_filter">
+              <property name="toolTip"><string>Filter applied when host resolution differs from guest render target</string></property>
+              <item><property name="text"><string>bilinear</string></property></item>
+              <item><property name="text"><string>nearest</string></property></item>
+              <item><property name="text"><string>bicubic</string></property></item>
+              <item><property name="text"><string>integer</string></property></item>
              </widget>
             </item>
             <item row="6" column="0">

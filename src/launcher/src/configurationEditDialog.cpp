@@ -284,6 +284,8 @@ void ConfigurationEditDialog::Init(const Configuration& info) {
 	m_ui->checkBox_vblank_catchup_enabled->setChecked(info.vblank_catchup_enabled);
 	m_ui->checkBox_speed_2x_enabled->setChecked(info.speed_2x_enabled);
 	m_ui->spinBox_frame_skip_count->setValue(info.frame_skip_count);
+	const int upscaling_idx = m_ui->comboBox_upscaling_filter->findText(info.upscaling_filter);
+	m_ui->comboBox_upscaling_filter->setCurrentIndex(upscaling_idx >= 0 ? upscaling_idx : 0);
 	m_ui->comboBox_console_language->clear();
 	m_ui->comboBox_console_language->addItems(CONSOLE_LANGUAGE_NAMES);
 	m_ui->comboBox_console_language->setCurrentIndex(
@@ -449,6 +451,7 @@ static void UpdateInfo(Configuration& info, Ui::ConfigurationEditDialog& ui, boo
 	info.vblank_catchup_enabled    = ui.checkBox_vblank_catchup_enabled->isChecked();
 	info.speed_2x_enabled         = ui.checkBox_speed_2x_enabled->isChecked();
 	info.frame_skip_count         = ui.spinBox_frame_skip_count->value();
+	info.upscaling_filter         = ui.comboBox_upscaling_filter->currentText();
 	info.console_language          = ui.comboBox_console_language->currentIndex();
 	info.vulkan_validation_enabled = ui.checkBox_vulkan_validation->isChecked();
 	info.shader_validation_enabled = ui.checkBox_shader_validation->isChecked();

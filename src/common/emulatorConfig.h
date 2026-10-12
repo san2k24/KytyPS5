@@ -66,6 +66,11 @@ struct ConfigOptions {
 	// choppy but the game runs at the correct speed). Default ON for forks
 	// targeting GPUs below PS5 spec (e.g. AMD RDNA1 / Radeon RX 5500 XT).
 	bool                   vblank_catchup_enabled       = true;
+	// Upscaling filter applied when the swapchain is bigger than the guest
+	// render target. Accepted values: "nearest" (sharp pixels), "bilinear"
+	// (smooth), "bicubic" (sharper smooth), "integer" (pixel-perfect,
+	// only when host resolution is an integer multiple of guest).
+	std::string            upscaling_filter             = "bilinear";
 	// PPSSPP-style 2x speed toggle: when true, the present thread fires 2
 	// vblanks for every rendered frame, making the game logic advance at
 	// 2x the configured vblank frequency (i.e. 120 Hz with the default 60
@@ -129,6 +134,7 @@ bool     VrEnabled();
 bool     AmdCpuEnabled();
 uint32_t GetVblankFrequency();
 bool     VblankCatchupEnabled();
+const std::string& GetUpscalingFilter();
 bool     Speed2xEnabled();
 uint32_t GetFrameSkipCount();
 uint32_t GetConsoleLanguage();

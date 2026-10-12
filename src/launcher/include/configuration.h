@@ -128,6 +128,7 @@ public:
 	bool                   vblank_catchup_enabled      = true;
 	bool                   speed_2x_enabled            = false;
 	int                    frame_skip_count            = 1;
+	QString                upscaling_filter           = "bilinear";
 	int                    console_language            = DEFAULT_CONSOLE_LANGUAGE;
 	bool                   vulkan_validation_enabled   = false;
 	bool                   shader_validation_enabled   = false;
@@ -167,6 +168,7 @@ public:
 		vblank_catchup_enabled      = other.vblank_catchup_enabled;
 		speed_2x_enabled            = other.speed_2x_enabled;
 		frame_skip_count            = other.frame_skip_count;
+		upscaling_filter            = other.upscaling_filter;
 		console_language            = other.console_language;
 		vulkan_validation_enabled   = other.vulkan_validation_enabled;
 		shader_validation_enabled   = other.shader_validation_enabled;
