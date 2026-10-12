@@ -722,9 +722,44 @@ Image::Image(GraphicContext& graphics, CommandScheduler& scheduler, const ImageI
 	}
 
 	if (!graphics.CreateImage(create, backing)) {
-		EXIT("failed to create image: extent=%ux%ux%u format=%d layers=%u levels=%u\n",
+		// VRAM exhaustion fallback (esp. Astro Bot 4096x4096 BC7 textures on
+		// RX 5500 XT 8GB / RTX 2080S 8GB). Retry with progressively fewer mip
+		// levels; high-mip chains (13 levels for 4096x4096) cost exponential
+		// VRAM. Each drop halves the total allocation. If all retries fail, log
+		// the original request and skip the texture (renderer will treat the
+		// image as missing — better than hard-crashing the emulator).
+		const auto original_levels = create.mipLevels;
+		const auto original_extent = create.extent;
+		bool created = false;
+		for (uint32_t try_levels = original_levels; try_levels >= 1 && !created; --try_levels) {
+			if (try_levels == original_levels) {
+				continue;  // Already tried with full mips.
+			}
+			create.mipLevels = try_levels;
+			created = graphics.CreateImage(create, backing);
+		}
+		if (!created && create.extent.width > 1 && create.extent.height > 1) {
+			// Last resort: halve the resolution too.
+			create.extent.width  = std::max(create.extent.width / 2u, 1u);
+			create.extent.height = std::max(create.extent.height / 2u, 1u);
+			create.extent.depth  = std::max(create.extent.depth / 2u, 1u);
+			create.mipLevels     = std::min(original_levels, 1u);
+			created = graphics.CreateImage(create, backing);
+		}
+		if (!created) {
+			LOGF("failed to create image (skipping): extent=%ux%ux%u format=%d layers=%u levels=%u "
+			     "(original extent=%ux%ux%u levels=%u)\n",
+			     create.extent.width, create.extent.height, create.extent.depth,
+			     static_cast<int>(create.format), create.arrayLayers, create.mipLevels,
+			     original_extent.width, original_extent.height, original_extent.depth,
+			     original_levels);
+			return;  // Skip texture creation; renderer treats image as missing.
+		}
+		LOGF("image created with reduced footprint: extent=%ux%ux%u levels=%u "
+		     "(original extent=%ux%ux%u levels=%u)\n",
 		     create.extent.width, create.extent.height, create.extent.depth,
-		     static_cast<int>(create.format), create.arrayLayers, create.mipLevels);
+		     create.mipLevels, original_extent.width, original_extent.height,
+		     original_extent.depth, original_levels);
 	}
 	SetVulkanObjectNameF(
 	    graphics.device, backing.image,
