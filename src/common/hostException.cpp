@@ -89,8 +89,7 @@ bool InitializeThreadSignalStack() {
 static uint8_t g_zero_page[65536] = {};
 
 // Decode the faulting x86-64 instruction at RIP and identify the base
-// register used for the memory operand. Returns the register index
-(0-15)
+// register used for the memory operand. Returns the register index 0-15
 // or -1 if the instruction can't be safely patched (e.g. RIP-relative,
 // SIB without a base register, or register-direct operand).
 static int FindFaultingBaseRegister(const uint8_t* code) {
