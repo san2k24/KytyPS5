@@ -869,6 +869,15 @@ void VideoOutDriver::Impl::PresentThread(std::stop_token token) {
 			continue;
 		}
 
+		// 2x speed mode (PPSSPP-style): fire an extra vblank BEFORE the main
+		// vblank so the game advances 2 ticks per rendered frame. With the
+		// default vblank_frequency=60, this makes the game run at 2x speed
+		// (120 Hz effective). Useful for fast-forwarding cutscenes.
+		if (Config::Speed2xEnabled()) {
+			VblankBegin();
+			VblankEnd();
+			total_wait -= static_cast<int64_t>(period);
+		}
 		// Catch-up vblanks: when the host GPU is rendering below the
 		// configured vblank frequency, fire additional vblank events so
 		// game logic (physics, audio, animations) advances at the correct
@@ -877,11 +886,21 @@ void VideoOutDriver::Impl::PresentThread(std::stop_token token) {
 		// RDNA1 / Radeon RX 5500 XT). The catch-up vblanks are fired before
 		// the main vblank (which includes rendering) so the most recent
 		// submitted frame is the one that gets rendered.
-		if (Config::VblankCatchupEnabled()) {
-			while (total_wait <= -static_cast<int64_t>(period)) {
+		//
+		// Frame skip (PPSSPP-style): in addition to catch-up, fire up to
+		// frame_skip_count vblanks per iteration to skip rendering on slow
+		// GPUs. The last vblank in the burst includes the actual frame
+		// flip/present; the earlier ones only advance game logic.
+		const uint32_t frame_skip = Config::GetFrameSkipCount();
+		if (Config::VblankCatchupEnabled() || frame_skip > 1) {
+			const int64_t skip_threshold =
+			    (frame_skip > 1) ? 0 : -static_cast<int64_t>(period);
+			uint32_t skip_fired = 0;
+			while (total_wait <= skip_threshold && skip_fired < frame_skip) {
 				VblankBegin();
 				VblankEnd();
 				total_wait += static_cast<int64_t>(period);
+				skip_fired++;
 			}
 		}
 		VblankBegin();

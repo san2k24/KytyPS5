@@ -1,6 +1,7 @@
 #include "graphics/shader/recompiler/ir/passes/SrtWalker.h"
 
 #include "common/abi.h"
+#include "kernel/memory.h"
 #include "common/assert.h"
 #include "graphics/shader/recompiler/ir/ShaderIR.h"
 
@@ -39,7 +40,13 @@ bool SrtReadCapture::ReadOrdinary(void* userdata, uint64_t address, std::span<ui
 	if (capture.m_source.read_memory != nullptr) {
 		if (!capture.m_source.read_memory(capture.m_source.userdata, address, values)) return false;
 	} else {
-		std::memcpy(values.data(), reinterpret_cast<const void*>(address), values.size_bytes());
+		// The walk evaluates loads the shader may never execute, e.g. through a
+		// null SRT pointer (base 0 + small offset). Read unmapped guest memory
+		// as zeros instead of faulting the host (PR #1365 covers the main
+		// pipeline; this is the fallback path when read_memory is null).
+		if (!Libs::LibKernel::Memory::TryReadBacking(address, values.data(), values.size_bytes())) {
+			std::ranges::fill(values, 0u);
+		}
 	}
 	capture.m_ranges.emplace_back(address, values.size_bytes());
 	return true;
@@ -691,7 +698,11 @@ bool SrtWalker::EvaluateRawRead(const Inst& inst, uint64_t& result) {
 		}
 	} else {
 		if (vector) return false;
-		std::memcpy(&word, reinterpret_cast<const void*>(address), sizeof(word));
+		// Same fallback as ReadOrdinary: read unmapped guest memory as zeros
+		// instead of dereferencing a possibly-null host pointer.
+		if (!Libs::LibKernel::Memory::TryReadBacking(address, &word, sizeof(word))) {
+			word = 0;
+		}
 	}
 	result = word;
 	return true;

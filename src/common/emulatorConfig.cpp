@@ -96,6 +96,14 @@ bool VblankCatchupEnabled() {
 	return g_config->vblank_catchup_enabled;
 }
 
+bool Speed2xEnabled() {
+	return g_config->speed_2x_enabled;
+}
+
+uint32_t GetFrameSkipCount() {
+	return std::clamp(g_config->frame_skip_count, 1u, 10u);
+}
+
 uint32_t GetConsoleLanguage() {
 	return g_config->console_language;
 }

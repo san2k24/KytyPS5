@@ -66,6 +66,21 @@ struct ConfigOptions {
 	// choppy but the game runs at the correct speed). Default ON for forks
 	// targeting GPUs below PS5 spec (e.g. AMD RDNA1 / Radeon RX 5500 XT).
 	bool                   vblank_catchup_enabled       = true;
+	// PPSSPP-style 2x speed toggle: when true, the present thread fires 2
+	// vblanks for every rendered frame, making the game logic advance at
+	// 2x the configured vblank frequency (i.e. 120 Hz with the default 60
+	// Hz). Useful for fast-forwarding cutscenes or replaying content. The
+	// game runs at 2x speed (audio pitched up, physics faster). Hold a hotkey
+	// or set this in the launcher to enable.
+	bool                   speed_2x_enabled             = false;
+	// PPSSPP-style frame skip: when the host GPU is behind by N vblank
+	// periods, skip rendering for N-1 frames and just fire vblank events
+	// for game logic. Different from vblank_catchup: catch-up fires ONLY
+	// the missed vblanks; frame_skip N fires N vblanks per loop iteration
+	// and renders only the last. With frame_skip=1 (default) the behavior
+	// matches the existing catch-up. Higher values trade visual smoothness
+	// for game-logic speed stability on very slow GPUs.
+	uint32_t                frame_skip_count             = 1;
 	uint32_t               console_language            = DEFAULT_CONSOLE_LANGUAGE;
 	bool                   vulkan_validation_enabled   = false;
 	bool                   shader_validation_enabled   = false;
@@ -114,6 +129,8 @@ bool     VrEnabled();
 bool     AmdCpuEnabled();
 uint32_t GetVblankFrequency();
 bool     VblankCatchupEnabled();
+bool     Speed2xEnabled();
+uint32_t GetFrameSkipCount();
 uint32_t GetConsoleLanguage();
 bool     VulkanValidationEnabled();
 

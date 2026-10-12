@@ -125,6 +125,9 @@ public:
 	bool                   trophy_enabled              = true;
 	bool                   skip_notice_screen          = false;
 	int                    vblank_frequency            = 60;
+	bool                   vblank_catchup_enabled      = true;
+	bool                   speed_2x_enabled            = false;
+	int                    frame_skip_count            = 1;
 	int                    console_language            = DEFAULT_CONSOLE_LANGUAGE;
 	bool                   vulkan_validation_enabled   = false;
 	bool                   shader_validation_enabled   = false;
@@ -161,6 +164,9 @@ public:
 		trophy_enabled              = other.trophy_enabled;
 		skip_notice_screen          = other.skip_notice_screen;
 		vblank_frequency            = other.vblank_frequency;
+		vblank_catchup_enabled      = other.vblank_catchup_enabled;
+		speed_2x_enabled            = other.speed_2x_enabled;
+		frame_skip_count            = other.frame_skip_count;
 		console_language            = other.console_language;
 		vulkan_validation_enabled   = other.vulkan_validation_enabled;
 		shader_validation_enabled   = other.shader_validation_enabled;

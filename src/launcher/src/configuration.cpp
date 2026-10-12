@@ -18,6 +18,9 @@ QVariantMap Configuration::GameSettings() const {
 	KYTY_CFG_SET(trophy_enabled);
 	KYTY_CFG_SET(skip_notice_screen);
 	KYTY_CFG_SET(vblank_frequency);
+	KYTY_CFG_SET(vblank_catchup_enabled);
+	KYTY_CFG_SET(speed_2x_enabled);
+	KYTY_CFG_SET(frame_skip_count);
 	KYTY_CFG_SET(console_language);
 	KYTY_CFG_SET(vulkan_validation_enabled);
 	KYTY_CFG_SET(shader_validation_enabled);
@@ -64,6 +67,12 @@ void Configuration::ReadGameSettingsValues(const Settings& s) {
 	trophy_enabled   = s.value("trophy_enabled", trophy_enabled).toBool();
 	KYTY_CFG_GET(skip_notice_screen);
 	vblank_frequency = s.value("vblank_frequency", vblank_frequency).toInt();
+	vblank_catchup_enabled = s.value("vblank_catchup_enabled", vblank_catchup_enabled).toBool();
+	speed_2x_enabled = s.value("speed_2x_enabled", speed_2x_enabled).toBool();
+	frame_skip_count = s.value("frame_skip_count", frame_skip_count).toInt();
+	if (frame_skip_count < 1 || frame_skip_count > 10) {
+		frame_skip_count = 1;
+	}
 	console_language = s.value("console_language", console_language).toInt();
 	if (console_language < 0 || console_language > MAX_CONSOLE_LANGUAGE) {
 		console_language = DEFAULT_CONSOLE_LANGUAGE;
