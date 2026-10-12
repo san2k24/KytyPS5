@@ -1,7 +1,6 @@
 #include "graphics/shader/recompiler/ir/passes/SrtWalker.h"
 
 #include "common/abi.h"
-#include "kernel/memory.h"
 #include "common/assert.h"
 #include "graphics/shader/recompiler/ir/ShaderIR.h"
 
@@ -41,11 +40,15 @@ bool SrtReadCapture::ReadOrdinary(void* userdata, uint64_t address, std::span<ui
 		if (!capture.m_source.read_memory(capture.m_source.userdata, address, values)) return false;
 	} else {
 		// The walk evaluates loads the shader may never execute, e.g. through a
-		// null SRT pointer (base 0 + small offset). Read unmapped guest memory
-		// as zeros instead of faulting the host (PR #1365 covers the main
-		// pipeline; this is the fallback path when read_memory is null).
-		if (!Libs::LibKernel::Memory::TryReadBacking(address, values.data(), values.size_bytes())) {
+		// null SRT pointer (base 0 + small offset). Reads below the null page
+		// (< 0x10000) return zeros instead of faulting the host. PR #1365
+		// covers the main pipeline path; this is the fallback when read_memory
+		// is null (e.g. unit tests, CleanRuntime walker). We avoid a hard
+		// kernel/memory.cpp dependency here so shader-only tests still link.
+		if (address < 0x10000ull) {
 			std::ranges::fill(values, 0u);
+		} else {
+			std::memcpy(values.data(), reinterpret_cast<const void*>(address), values.size_bytes());
 		}
 	}
 	capture.m_ranges.emplace_back(address, values.size_bytes());
@@ -698,10 +701,13 @@ bool SrtWalker::EvaluateRawRead(const Inst& inst, uint64_t& result) {
 		}
 	} else {
 		if (vector) return false;
-		// Same fallback as ReadOrdinary: read unmapped guest memory as zeros
-		// instead of dereferencing a possibly-null host pointer.
-		if (!Libs::LibKernel::Memory::TryReadBacking(address, &word, sizeof(word))) {
+		// Same null-page guard as ReadOrdinary: reads below 0x10000 return 0
+		// instead of dereferencing a possibly-null host pointer. Avoids the
+		// kernel/memory.cpp dependency so shader-only tests still link.
+		if (address < 0x10000ull) {
 			word = 0;
+		} else {
+			std::memcpy(&word, reinterpret_cast<const void*>(address), sizeof(word));
 		}
 	}
 	result = word;
