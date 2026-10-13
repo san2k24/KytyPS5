@@ -8,6 +8,7 @@
 #include "gpu_blit_shaders/gpu_upscale_bicubic_spv.h"
 #include "gpu_blit_shaders/gpu_upscale_fsr_spv.h"
 #include "gpu_blit_shaders/gpu_upscale_scaleforce_spv.h"
+#include "gpu_blit_shaders/gpu_sharpen_rcas_spv.h"
 #include "gpu_blit_shaders/gpu_video_out_overlay_spv.h"
 #include "graphics/host_gpu/graphicContext.h"
 #include "graphics/host_gpu/renderer/render.h"
@@ -294,6 +295,7 @@ private:
         void Destroy();
         void DrawOverlay(vk::CommandBuffer command, const Presenter::Layer& layer);
         void DrawUpscale(vk::CommandBuffer command, Presenter::Frame& source, const vk::Rect2D& rect);
+        [[nodiscard]] bool EnsureSharpenTarget();
         [[nodiscard]] vk::Rect2D ComputePresentRect(const vk::Extent2D& src) const;
 
         WindowContext&   m_window;
@@ -318,6 +320,19 @@ private:
         vk::PipelineLayout             m_upscale_layout      = nullptr;
         vk::Pipeline                   m_upscale_pipeline    = nullptr;
         vk::Sampler                    m_upscale_sampler     = nullptr;
+        // Second-pass FSR1 RCAS sharpening pipeline. Created on demand when
+        // the user enables upscaling sharpening; null otherwise.
+        vk::Pipeline                   m_rcas_pipeline       = nullptr;
+        // Intermediate color target the upscaling filter renders into before
+        // the RCAS pass samples it. Owned here (not per-frame) because it is
+        // only needed when sharpening is enabled and tracks the swapchain
+        // extent/format.
+        Image                          m_sharpen_image {};
+        vk::ImageView                  m_sharpen_view        = nullptr;
+        // Last known state of the intermediate target for explicit barriers.
+        vk::PipelineStageFlags2        m_sharpen_stage       = vk::PipelineStageFlagBits2::eTopOfPipe;
+        vk::AccessFlags2               m_sharpen_access      = vk::AccessFlagBits2::eNone;
+        vk::ImageLayout                m_sharpen_layout      = vk::ImageLayout::eUndefined;
         // True when the current frame renders the guest image with a graphics
         // pipeline (shader upscaling) instead of a blit; the acquire semaphore
         // wait stage differs between the two paths.
@@ -568,6 +583,20 @@ void Swapchain::Destroy() {
         m_upscale_layout      = nullptr;
         m_upscale_descriptors = nullptr;
         m_upscale_sampler     = nullptr;
+
+        graphics.device.destroyPipeline(m_rcas_pipeline, nullptr);
+        m_rcas_pipeline = nullptr;
+        if (m_sharpen_view != nullptr) {
+                graphics.device.destroyImageView(m_sharpen_view, nullptr);
+                m_sharpen_view = nullptr;
+        }
+        if (m_sharpen_image.image != nullptr) {
+                graphics.DeleteImage(m_sharpen_image);
+                m_sharpen_image.image = nullptr;
+        }
+        m_sharpen_stage  = vk::PipelineStageFlagBits2::eTopOfPipe;
+        m_sharpen_access = vk::AccessFlagBits2::eNone;
+        m_sharpen_layout = vk::ImageLayout::eUndefined;
 
         for (const auto semaphore: m_image_acquired) {
                 if (semaphore != nullptr) {
@@ -917,6 +946,63 @@ void Swapchain::DrawUpscale(vk::CommandBuffer command, Presenter::Frame& source,
                 device.destroyShaderModule(fragment, nullptr);
                 device.destroyShaderModule(vertex, nullptr);
         }
+        const uint32_t sharpness = Config::GetUpscalingSharpness();
+        if (sharpness > 0 && m_rcas_pipeline == nullptr) {
+                // Second-pass FSR1 RCAS pipeline. Shares the upscale layout
+                // (the RCAS shader reads only the first 32 push-constant
+                // bytes), sampler and descriptor set layout.
+                const auto vertex = CompileSPV(GPU_BLIT_FS_TRIANGLE_SPV, device);
+                const auto fragment = CompileSPV(GPU_SHARPEN_RCAS_SPV, device);
+                std::array<vk::PipelineShaderStageCreateInfo, 2> stages {};
+                stages[0].stage  = vk::ShaderStageFlagBits::eVertex;
+                stages[0].module = vertex;
+                stages[0].pName  = "main";
+                stages[1].stage  = vk::ShaderStageFlagBits::eFragment;
+                stages[1].module = fragment;
+                stages[1].pName  = "main";
+                vk::PipelineVertexInputStateCreateInfo   vertex_input {};
+                vk::PipelineInputAssemblyStateCreateInfo assembly {};
+                assembly.topology = vk::PrimitiveTopology::eTriangleList;
+                vk::PipelineViewportStateCreateInfo viewport {};
+                viewport.viewportCount = 1;
+                viewport.scissorCount  = 1;
+                vk::PipelineRasterizationStateCreateInfo rasterization {};
+                rasterization.lineWidth = 1.0f;
+                vk::PipelineMultisampleStateCreateInfo multisample {};
+                multisample.rasterizationSamples = vk::SampleCountFlagBits::e1;
+                vk::PipelineColorBlendAttachmentState attachment {};
+                attachment.blendEnable    = VK_FALSE;
+                attachment.colorWriteMask = vk::ColorComponentFlagBits::eR |
+                                            vk::ColorComponentFlagBits::eG |
+                                            vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+                vk::PipelineColorBlendStateCreateInfo blend {};
+                blend.attachmentCount = 1;
+                blend.pAttachments    = &attachment;
+                const std::array dynamic_states {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+                vk::PipelineDynamicStateCreateInfo dynamic {};
+                dynamic.dynamicStateCount = static_cast<uint32_t>(dynamic_states.size());
+                dynamic.pDynamicStates    = dynamic_states.data();
+                vk::PipelineRenderingCreateInfo rendering {};
+                rendering.colorAttachmentCount    = 1;
+                rendering.pColorAttachmentFormats = &m_format;
+                vk::GraphicsPipelineCreateInfo create {};
+                create.pNext               = &rendering;
+                create.stageCount          = static_cast<uint32_t>(stages.size());
+                create.pStages             = stages.data();
+                create.pVertexInputState   = &vertex_input;
+                create.pInputAssemblyState = &assembly;
+                create.pViewportState      = &viewport;
+                create.pRasterizationState = &rasterization;
+                create.pMultisampleState   = &multisample;
+                create.pColorBlendState    = &blend;
+                create.pDynamicState       = &dynamic;
+                create.layout              = m_upscale_layout;
+                RequireVulkanSuccess(
+                    device.createGraphicsPipelines(nullptr, 1, &create, nullptr, &m_rcas_pipeline),
+                    "create RCAS sharpening pipeline");
+                device.destroyShaderModule(fragment, nullptr);
+                device.destroyShaderModule(vertex, nullptr);
+        }
         if (source.view == nullptr) {
                 vk::ImageViewCreateInfo view {};
                 view.image            = source.image.image;
@@ -969,6 +1055,100 @@ void Swapchain::DrawUpscale(vk::CommandBuffer command, Presenter::Frame& source,
         command.pushConstants(m_upscale_layout, vk::ShaderStageFlagBits::eFragment, 0,
                               sizeof(constants), constants.data());
         command.bindPipeline(vk::PipelineBindPoint::eGraphics, m_upscale_pipeline);
+        const vk::Viewport viewport {
+            static_cast<float>(rect.offset.x), static_cast<float>(rect.offset.y),
+            static_cast<float>(rect.extent.width), static_cast<float>(rect.extent.height), 0.0f, 1.0f};
+        const vk::Rect2D scissor {{0, 0}, m_extent};
+
+        // FSR1 RCAS sharpening renders the upscaling filter into an
+        // intermediate target first, then sharpens it into the swapchain as a
+        // second pass. Falls back to the single-pass path when the format
+        // lacks sampled color attachment support or creation failed.
+        if (sharpness > 0 && EnsureSharpenTarget()) {
+                auto sharpen_barrier = [&](vk::PipelineStageFlags2 dst_stage,
+                                           vk::AccessFlags2          dst_access,
+                                           vk::ImageLayout           dst_layout) {
+                        vk::ImageMemoryBarrier2 barrier {};
+                        barrier.srcStageMask        = m_sharpen_stage;
+                        barrier.srcAccessMask       = m_sharpen_access;
+                        barrier.dstStageMask        = dst_stage;
+                        barrier.dstAccessMask       = dst_access;
+                        barrier.oldLayout           = m_sharpen_layout;
+                        barrier.newLayout           = dst_layout;
+                        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        barrier.image               = m_sharpen_image.image;
+                        barrier.subresourceRange    = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+                        vk::DependencyInfo dependency {};
+                        dependency.imageMemoryBarrierCount = 1;
+                        dependency.pImageMemoryBarriers    = &barrier;
+                        command.pipelineBarrier2(dependency);
+                        m_sharpen_stage  = dst_stage;
+                        m_sharpen_access = dst_access;
+                        m_sharpen_layout = dst_layout;
+                };
+
+                // Pass 1: upscaling filter into the intermediate target.
+                sharpen_barrier(vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                                vk::AccessFlagBits2::eColorAttachmentWrite,
+                                vk::ImageLayout::eColorAttachmentOptimal);
+                vk::RenderingAttachmentInfo intermediate_attachment {};
+                intermediate_attachment.imageView      = m_sharpen_view;
+                intermediate_attachment.imageLayout    = vk::ImageLayout::eColorAttachmentOptimal;
+                intermediate_attachment.loadOp         = vk::AttachmentLoadOp::eDontCare;
+                intermediate_attachment.storeOp        = vk::AttachmentStoreOp::eStore;
+                vk::RenderingInfo intermediate_rendering {};
+                intermediate_rendering.renderArea.extent    = m_extent;
+                intermediate_rendering.layerCount           = 1;
+                intermediate_rendering.colorAttachmentCount = 1;
+                intermediate_rendering.pColorAttachments    = &intermediate_attachment;
+                command.beginRendering(&intermediate_rendering);
+                command.setViewport(0, 1, &viewport);
+                command.setScissor(0, 1, &scissor);
+                command.draw(3, 1, 0, 0);
+                command.endRendering();
+
+                // Pass 2: RCAS sharpening into the swapchain image.
+                sharpen_barrier(vk::PipelineStageFlagBits2::eFragmentShader,
+                                vk::AccessFlagBits2::eShaderRead,
+                                vk::ImageLayout::eShaderReadOnlyOptimal);
+                std::array<uint32_t, 20> rcas_constants {};
+                rcas_constants[0]       = std::clamp(sharpness, 0u, 100u) * 255u / 100u;
+                rcas_constants[4]       = static_cast<uint32_t>(rect.offset.x);
+                rcas_constants[5]       = static_cast<uint32_t>(rect.offset.y);
+                rcas_constants[6]       = rect.extent.width;
+                rcas_constants[7]       = rect.extent.height;
+                const vk::DescriptorImageInfo sharpened_image {
+                    m_upscale_sampler, m_sharpen_view, vk::ImageLayout::eShaderReadOnlyOptimal};
+                vk::WriteDescriptorSet sharpened_write {};
+                sharpened_write.dstBinding      = 0;
+                sharpened_write.descriptorCount = 1;
+                sharpened_write.descriptorType  = vk::DescriptorType::eCombinedImageSampler;
+                sharpened_write.pImageInfo      = &sharpened_image;
+                command.pushDescriptorSetKHR(vk::PipelineBindPoint::eGraphics, m_upscale_layout, 0, 1,
+                                             &sharpened_write);
+                command.pushConstants(m_upscale_layout, vk::ShaderStageFlagBits::eFragment, 0,
+                                      sizeof(rcas_constants), rcas_constants.data());
+                command.bindPipeline(vk::PipelineBindPoint::eGraphics, m_rcas_pipeline);
+                vk::RenderingAttachmentInfo attachment {};
+                attachment.imageView        = m_image_views[m_image_index];
+                attachment.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
+                attachment.loadOp           = vk::AttachmentLoadOp::eClear;
+                attachment.storeOp          = vk::AttachmentStoreOp::eStore;
+                attachment.clearValue.color = vk::ClearColorValue {std::array<float, 4> {0.0f, 0.0f, 0.0f, 1.0f}};
+                vk::RenderingInfo rendering {};
+                rendering.renderArea.extent    = m_extent;
+                rendering.layerCount           = 1;
+                rendering.colorAttachmentCount = 1;
+                rendering.pColorAttachments    = &attachment;
+                command.beginRendering(&rendering);
+                command.setViewport(0, 1, &viewport);
+                command.setScissor(0, 1, &scissor);
+                command.draw(3, 1, 0, 0);
+                command.endRendering();
+                return;
+        }
+
         vk::RenderingAttachmentInfo attachment {};
         attachment.imageView        = m_image_views[m_image_index];
         attachment.imageLayout      = vk::ImageLayout::eColorAttachmentOptimal;
@@ -981,14 +1161,72 @@ void Swapchain::DrawUpscale(vk::CommandBuffer command, Presenter::Frame& source,
         rendering.colorAttachmentCount = 1;
         rendering.pColorAttachments    = &attachment;
         command.beginRendering(&rendering);
-        const vk::Viewport viewport {
-            static_cast<float>(rect.offset.x), static_cast<float>(rect.offset.y),
-            static_cast<float>(rect.extent.width), static_cast<float>(rect.extent.height), 0.0f, 1.0f};
-        const vk::Rect2D scissor {{0, 0}, m_extent};
         command.setViewport(0, 1, &viewport);
         command.setScissor(0, 1, &scissor);
         command.draw(3, 1, 0, 0);
         command.endRendering();
+}
+
+// Lazily allocate (or reallocate after a swapchain resize) the intermediate
+// color target consumed by the RCAS sharpening pass. Returns false when the
+// swapchain format cannot be rendered to and sampled from, in which case the
+// caller falls back to the single-pass present path.
+bool Swapchain::EnsureSharpenTarget() {
+        auto& graphics = m_window.graphic_ctx;
+        if (m_sharpen_image.image != nullptr && m_sharpen_view != nullptr &&
+            m_sharpen_image.extent.width == m_extent.width &&
+            m_sharpen_image.extent.height == m_extent.height && m_sharpen_image.format == m_format) {
+                return true;
+        }
+        if (m_sharpen_view != nullptr) {
+                graphics.device.destroyImageView(m_sharpen_view, nullptr);
+                m_sharpen_view = nullptr;
+        }
+        if (m_sharpen_image.image != nullptr) {
+                graphics.DeleteImage(m_sharpen_image);
+                m_sharpen_image.image = nullptr;
+        }
+        m_sharpen_stage  = vk::PipelineStageFlagBits2::eTopOfPipe;
+        m_sharpen_access = vk::AccessFlagBits2::eNone;
+        m_sharpen_layout = vk::ImageLayout::eUndefined;
+
+        const auto features = graphics.GetFormatProperties(m_format).optimalTilingFeatures;
+        const auto required = vk::FormatFeatureFlagBits::eColorAttachment |
+                              vk::FormatFeatureFlagBits::eSampled;
+        if ((features & required) != required) {
+                static std::atomic_bool warned {false};
+                if (!warned.exchange(true)) {
+                        LOGF("RCAS sharpening disabled: swapchain format %d lacks sampled color "
+                             "attachment support\n",
+                             static_cast<int>(m_format));
+                }
+                return false;
+        }
+
+        vk::ImageCreateInfo create {};
+        create.imageType     = vk::ImageType::e2D;
+        create.extent        = {m_extent.width, m_extent.height, 1};
+        create.mipLevels     = 1;
+        create.arrayLayers   = 1;
+        create.format        = m_format;
+        create.tiling        = vk::ImageTiling::eOptimal;
+        create.initialLayout = vk::ImageLayout::eUndefined;
+        create.usage         = vk::ImageUsageFlagBits::eColorAttachment |
+                       vk::ImageUsageFlagBits::eSampled;
+        create.sharingMode = vk::SharingMode::eExclusive;
+        create.samples     = vk::SampleCountFlagBits::e1;
+        if (!graphics.CreateImage(create, m_sharpen_image)) {
+                LOGF("failed to allocate the RCAS sharpening intermediate target\n");
+                return false;
+        }
+        vk::ImageViewCreateInfo view {};
+        view.image            = m_sharpen_image.image;
+        view.viewType         = vk::ImageViewType::e2D;
+        view.format           = m_format;
+        view.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+        RequireVulkanSuccess(graphics.device.createImageView(&view, nullptr, &m_sharpen_view),
+                             "create RCAS sharpening intermediate view");
+        return true;
 }
 
 void Swapchain::RecordPresentCommands(CommandBuffer& command, Presenter::Frame* source,

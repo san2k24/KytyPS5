@@ -81,11 +81,14 @@ static void PrintUsage() {
         ::printf("  --speed-2x <true|false>              Run game at 2x speed (PPSSPP fast-forward). Default: false.\n");
         ::printf("  --frame-skip <1-10>                  Max vblanks fired per rendered frame. Default: 1.\n");
         ::printf("  --upscaling-filter <filter>         nearest, bilinear, bicubic, integer, fsr, or scaleforce. Default: bilinear.\n");
+        ::printf("  --upscaling-sharpness <0-100>       FSR1 RCAS sharpening strength after the upscaling filter. 0 disables. Default: 80.\n");
+        ::printf("  --texture-filtering <mode>          game (faithful) or force_af (force 16x anisotropic filtering). Default: game.\n");
         ::printf("  --aspect-ratio <ratio>              stretch, 16:9, 16:10, 4:3, or 21:9. Default: stretch.\n");
         ::printf("  --max-queued-frames <0-4>           Swapchain images; 0 = auto. 2 = lowest latency, 4 = smoothest.\n");
         ::printf("  --audio-output-device <name>        SDL playback device; omit for the system default.\n");
         ::printf("  --master-volume <0-200>             Main audio output volume in percent. Default: 100.\n");
         ::printf("  --shader-cache <true|false>         Persist the Vulkan pipeline cache per game. Default: true.\n");
+        ::printf("  --shader-cache-async-save <bool>    Periodic background cache checkpoints so crashes keep warm runs. Default: true.\n");
         ::printf("  --thread-affinity <spec>            Host cores to run on, e.g. 0-7 or 0,2,4. Default: unrestricted.\n");
         ::printf("  --console-language <0-29>            Console language. Default: 1 (English US).\n");
         ::printf("  --vulkan-validation <true|false>     Enable Vulkan validation.\n");
@@ -521,6 +524,19 @@ static bool ParseArgs(int argc, char* argv[], RunOptions& options, bool& show_he
                                 ::printf("invalid upscaling-filter: %s\n", value.c_str());
                                 return false;
                         }
+                } else if (arg == "--upscaling-sharpness") {
+                        if (!ParseUint32(value, options.config.upscaling_sharpness) ||
+                            options.config.upscaling_sharpness > 100) {
+                                ::printf("invalid upscaling-sharpness: %s\n", value.c_str());
+                                return false;
+                        }
+                } else if (arg == "--texture-filtering") {
+                        if (value == "game" || value == "force_af") {
+                                options.config.texture_filtering = value;
+                        } else {
+                                ::printf("invalid texture-filtering: %s\n", value.c_str());
+                                return false;
+                        }
                 } else if (arg == "--aspect-ratio") {
                         if (value == "stretch" || value == "16:9" || value == "16:10" ||
                             value == "4:3" || value == "21:9") {
@@ -545,6 +561,11 @@ static bool ParseArgs(int argc, char* argv[], RunOptions& options, bool& show_he
                         }
                 } else if (arg == "--shader-cache") {
                         if (!ParseBool(value, options.config.shader_cache_enabled)) {
+                                ::printf("invalid boolean for %s: %s\n", arg.c_str(), value.c_str());
+                                return false;
+                        }
+                } else if (arg == "--shader-cache-async-save") {
+                        if (!ParseBool(value, options.config.shader_cache_async_save)) {
                                 ::printf("invalid boolean for %s: %s\n", arg.c_str(), value.c_str());
                                 return false;
                         }

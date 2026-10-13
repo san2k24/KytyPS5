@@ -491,6 +491,12 @@ PipelineCache::PipelineCache(GraphicContext& graphics)
 }
 
 PipelineCache::~PipelineCache() {
+        {
+                Common::LockGuard lock(m_save_worker_mutex);
+                if (m_save_worker.joinable()) {
+                        m_save_worker.join();
+                }
+        }
         Save();
         auto destroy = [this](const auto& pipelines) {
                 for (const auto& [key, pipeline]: pipelines) {
@@ -598,8 +604,16 @@ void PipelineCache::InitializeDriverCache() {
 }
 
 void PipelineCache::Save() {
-        if (m_driver_cache == nullptr || !Config::ShaderCacheEnabled()) {
+        if (!WriteDriverCache()) {
                 return;
+        }
+        m_graphics.device.destroyPipelineCache(m_driver_cache, nullptr);
+        m_driver_cache = nullptr;
+}
+
+bool PipelineCache::WriteDriverCache() {
+        if (m_driver_cache == nullptr || !Config::ShaderCacheEnabled()) {
+                return false;
         }
 
         size_t               size = 0;
@@ -622,7 +636,7 @@ void PipelineCache::Save() {
             size > std::numeric_limits<uint32_t>::max()) {
                 PipelineCacheLog("Vulkan pipeline cache: save failed ({}, {} bytes)",
                                  vk::to_string(result), size);
-                return;
+                return false;
         }
         payload.resize(size);
         auto       prefix       = DriverCacheSignature(m_graphics.GetPhysicalDeviceProperties());
@@ -630,7 +644,7 @@ void PipelineCache::Save() {
         prefix.append(reinterpret_cast<const char*>(&payload_hash), sizeof(payload_hash));
         if (!Common::File::CreateDirectories(m_driver_cache_path.parent_path())) {
                 PipelineCacheLog("Vulkan pipeline cache: failed to create cache directory");
-                return;
+                return false;
         }
         auto temp_path = m_driver_cache_path;
         temp_path += ".tmp";
@@ -647,12 +661,82 @@ void PipelineCache::Save() {
             !Common::File::RenameFile(temp_path, m_driver_cache_path)) {
                 PipelineCacheLog("Vulkan pipeline cache: failed to write {}",
                                  Common::PathToString(m_driver_cache_path));
-                return;
+                return false;
         }
         PipelineCacheLog("Vulkan pipeline cache: saved {} bytes to {}", payload.size(),
                          Common::PathToString(m_driver_cache_path));
-        m_graphics.device.destroyPipelineCache(m_driver_cache, nullptr);
-        m_driver_cache = nullptr;
+        return true;
+}
+
+void PipelineCache::MaybeSave() {
+        // Periodic crash-safe checkpoint: games that crash or are killed keep
+        // the pipelines compiled so far, so the next run starts warm. The blob
+        // is fetched synchronously (the renderer serializes this call with
+        // pipeline creation) but the file write runs on a background thread.
+        if (m_driver_cache == nullptr || !Config::ShaderCacheAsyncSaveEnabled()) {
+                return;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (m_last_periodic_save.time_since_epoch().count() != 0 &&
+            now - m_last_periodic_save < std::chrono::minutes(2)) {
+                return;
+        }
+        m_last_periodic_save = now;
+
+        size_t               size = 0;
+        vk::Result           result;
+        std::vector<uint8_t> payload;
+        for (uint32_t attempt = 0; attempt < 3; attempt++) {
+                size   = 0;
+                result = m_graphics.device.getPipelineCacheData(m_driver_cache, &size, nullptr);
+                if (result != vk::Result::eSuccess || size == 0 ||
+                    size > std::numeric_limits<uint32_t>::max()) {
+                        break;
+                }
+                payload.resize(size);
+                result = m_graphics.device.getPipelineCacheData(m_driver_cache, &size, payload.data());
+                if (result != vk::Result::eIncomplete) {
+                        break;
+                }
+        }
+        if (result != vk::Result::eSuccess || size == 0 ||
+            size > std::numeric_limits<uint32_t>::max()) {
+                return;
+        }
+        payload.resize(size);
+        auto prefix = DriverCacheSignature(m_graphics.GetPhysicalDeviceProperties());
+        const auto payload_hash = XXH3_64bits(payload.data(), payload.size());
+        prefix.append(reinterpret_cast<const char*>(&payload_hash), sizeof(payload_hash));
+
+        Common::LockGuard lock(m_save_worker_mutex);
+        if (m_save_worker.joinable()) {
+                m_save_worker.join();
+        }
+        m_save_worker = std::thread(
+            [payload = std::move(payload), prefix = std::move(prefix),
+             path = m_driver_cache_path]() {
+                    if (!Common::File::CreateDirectories(path.parent_path())) {
+                            return;
+                    }
+                    auto temp_path = path;
+                    temp_path += ".tmp";
+                    Common::File file;
+                    uint32_t     prefix_written  = 0;
+                    uint32_t     payload_written = 0;
+                    if (file.Create(temp_path)) {
+                            file.Write(prefix.data(), static_cast<uint32_t>(prefix.size()),
+                                       &prefix_written);
+                            file.Write(payload.data(), static_cast<uint32_t>(payload.size()),
+                                       &payload_written);
+                    }
+                    const bool flushed = !file.IsInvalid() && file.Flush();
+                    file.Close();
+                    if (prefix_written == prefix.size() && payload_written == payload.size() &&
+                        flushed && Common::File::RenameFile(temp_path, path)) {
+                            PipelineCacheLog("Vulkan pipeline cache: checkpoint saved {} bytes to {}",
+                                             payload.size(), Common::PathToString(path));
+                    }
+            });
 }
 
 PipelineCache::GraphicsPrograms PipelineCache::GetGraphicsPrograms(

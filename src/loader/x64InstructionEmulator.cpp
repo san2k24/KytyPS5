@@ -799,13 +799,43 @@ static bool TryEmulateReciprocalSquareRoot(Context& context) {
 	return true;
 }
 
+#if KYTY_PLATFORM == KYTY_PLATFORM_WINDOWS
+static bool TryEmulateImpl(void* native_context) {
+	if (native_context == nullptr) {
+		return false;
+	}
+	Context context {static_cast<PCONTEXT>(native_context)};
+	return TryEmulateReciprocalSquareRoot(context) || TryEmulateMonitorxMwaitx(context) ||
+	       TryEmulateSse4a(context) ||
+#if !defined(__APPLE__)
+	       TryEmulateShaNi(context) ||
+#endif
+	       TryEmulateCpuExtensions(context);
+}
+
+bool TryEmulate(void* native_context) {
+	// The emulation helpers read up to 15 instruction bytes at RIP and touch
+	// SIMD state without being able to validate that every byte is mapped: a
+	// trap sitting at the end of a mapped page, or a guest image corrupted in
+	// a way that wild-jumps into partially mapped memory, faults again inside
+	// this handler. A second exception inside a vectored exception handler is
+	// fatal on Windows and bypasses the emulator's own crash reporting, so any
+	// nested access violation is mapped to "cannot emulate" and reported by
+	// the outer handler.
+	__try {
+		return TryEmulateImpl(native_context);
+	} __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+	               ? EXCEPTION_EXECUTE_HANDLER
+	               : EXCEPTION_CONTINUE_SEARCH) {
+		return false;
+	}
+}
+#else
 bool TryEmulate(void* native_context) {
 	if (native_context == nullptr) {
 		return false;
 	}
-#if KYTY_PLATFORM == KYTY_PLATFORM_WINDOWS
-	Context context {static_cast<PCONTEXT>(native_context)};
-#elif defined(__APPLE__)
+#if defined(__APPLE__)
 	auto* saved_context = static_cast<ucontext_t*>(native_context);
 	if (saved_context->uc_mcontext == nullptr) {
 		return false;
@@ -821,5 +851,6 @@ bool TryEmulate(void* native_context) {
 #endif
 	       TryEmulateCpuExtensions(context);
 }
+#endif
 
 } // namespace Loader::X64InstructionEmulator

@@ -647,6 +647,62 @@ static bool IsReadableRange(uint64_t addr, uint64_t size) {
 	return true;
 }
 
+#if KYTY_PLATFORM == KYTY_PLATFORM_WINDOWS
+// Resolve an arbitrary address to "module.dll+0xRVA" (or the raw address when
+// it does not belong to any loaded module). Runs inside the exception handler,
+// so only loader-lock-safe APIs (GetModuleHandleExW/GetModuleFileNameW) are
+// used and failures are non-fatal.
+static void DescribeModuleAddress(uint64_t address, char* out, size_t out_size) {
+	if (out_size == 0) {
+		return;
+	}
+	out[0] = '\0';
+	if (address == 0) {
+		std::snprintf(out, out_size, "0x0");
+		return;
+	}
+	HMODULE module = nullptr;
+	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+	                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+	                       reinterpret_cast<LPCWSTR>(static_cast<uintptr_t>(address)),
+	                       &module) != 0 &&
+	    module != nullptr) {
+		wchar_t wide_path[MAX_PATH] = {};
+		if (GetModuleFileNameW(module, wide_path, MAX_PATH) > 0) {
+			char narrow_path[MAX_PATH] = {};
+			WideCharToMultiByte(CP_UTF8, 0, wide_path, -1, narrow_path,
+			                    static_cast<int>(sizeof(narrow_path)), nullptr, nullptr);
+			const char* slash = std::strrchr(narrow_path, '/');
+			const char* back  = std::strrchr(narrow_path, '\\');
+			const char* file  = (back != nullptr && (slash == nullptr || back > slash))
+			                        ? back + 1
+			                        : (slash != nullptr ? slash + 1 : narrow_path);
+			std::snprintf(out, out_size, "%s+0x%llx", file,
+			              static_cast<unsigned long long>(
+			                  address - reinterpret_cast<uint64_t>(module)));
+			return;
+		}
+	}
+	std::snprintf(out, out_size, "0x%016llx", static_cast<unsigned long long>(address));
+}
+
+// A faulting RSP within 32 KiB of the thread stack allocation base almost
+// always means the guest (or a deeply recursive host path) exhausted its
+// stack, which corrupts whatever the exception dispatcher then writes.
+static bool IsNearStackBase(uint64_t rsp) {
+	if (rsp == 0) {
+		return false;
+	}
+	MEMORY_BASIC_INFORMATION mbi {};
+	if (VirtualQuery(reinterpret_cast<LPCVOID>(static_cast<uintptr_t>(rsp)), &mbi,
+	                 sizeof(mbi)) == 0 ||
+	    mbi.AllocationBase == nullptr) {
+		return false;
+	}
+	return rsp - reinterpret_cast<uint64_t>(mbi.AllocationBase) < 0x8000ull;
+}
+#endif
+
 static bool KytyExceptionHandler(const Common::HostException::ExceptionInfo& exception_info) {
 	const auto* info = &exception_info;
 
@@ -680,6 +736,23 @@ static bool KytyExceptionHandler(const Common::HostException::ExceptionInfo& exc
 		}
 		std::printf("--- Guest fault context ---\n");
 		std::printf("thread: %s\n", thread_name);
+#if KYTY_PLATFORM == KYTY_PLATFORM_WINDOWS
+		{
+			char pc_desc[512]       = {};
+			char ret_desc[512]      = {};
+			uint64_t return_address = 0;
+			if (IsReadableRange(info->rsp, sizeof(uint64_t))) {
+				return_address = *reinterpret_cast<const uint64_t*>(info->rsp);
+			}
+			DescribeModuleAddress(info->exception_address, pc_desc, sizeof(pc_desc));
+			DescribeModuleAddress(return_address, ret_desc, sizeof(ret_desc));
+			std::printf("fault at %s%s\n", pc_desc,
+			            IsNearStackBase(info->rsp)
+			                ? " (rsp near stack base: possible stack overflow)"
+			                : "");
+			std::printf("return address at rsp: %s\n", ret_desc);
+		}
+#endif
 		std::printf("rax=%016" PRIx64 " rbx=%016" PRIx64 " rcx=%016" PRIx64 " rdx=%016" PRIx64 "\n"
 		            "rsi=%016" PRIx64 " rdi=%016" PRIx64 " rbp=%016" PRIx64 " rsp=%016" PRIx64 "\n"
 		            "r8 =%016" PRIx64 " r9 =%016" PRIx64 " r10=%016" PRIx64 " r11=%016" PRIx64 "\n"

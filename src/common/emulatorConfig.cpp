@@ -100,6 +100,14 @@ const std::string& GetUpscalingFilter() {
         return g_config->upscaling_filter;
 }
 
+uint32_t GetUpscalingSharpness() {
+        return std::clamp(g_config->upscaling_sharpness, 0u, 100u);
+}
+
+const std::string& GetTextureFiltering() {
+        return g_config->texture_filtering;
+}
+
 bool Speed2xEnabled() {
         return g_config->speed_2x_enabled;
 }
@@ -132,6 +140,10 @@ uint32_t GetMasterVolume() {
 
 bool ShaderCacheEnabled() {
         return g_config->shader_cache_enabled;
+}
+
+bool ShaderCacheAsyncSaveEnabled() {
+        return g_config->shader_cache_enabled && g_config->shader_cache_async_save;
 }
 
 const std::string& GetCpuAffinity() {

@@ -401,6 +401,42 @@
             <item><property name="text"><string>scaleforce</string></property></item>
            </widget>
           </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_upscale_sharpness">
+            <property name="text"><string>RCAS sharpening:</string></property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <layout class="QHBoxLayout" name="upscaleSharpnessLayout">
+            <item>
+             <widget class="QSlider" name="slider_upscale_sharpness">
+              <property name="toolTip"><string>AMD FidelityFX RCAS contrast-adaptive sharpening applied after the fsr, scaleforce or bicubic upscaling filter. 0% disables the sharpening pass; higher values are sharper (may over-sharpen halos at 100%).</string></property>
+              <property name="minimum"><number>0</number></property>
+              <property name="maximum"><number>100</number></property>
+              <property name="value"><number>80</number></property>
+              <property name="orientation"><enum>Qt::Horizontal</enum></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_upscale_sharpness_value">
+              <property name="minimumSize"><size><width>40</width><height>0</height></size></property>
+              <property name="text"><string>80%</string></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_texture_filtering">
+            <property name="text"><string>Texture filtering:</string></property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QComboBox" name="comboBox_texture_filtering">
+            <property name="toolTip"><string>game keeps the exact sampler state programmed by the game (faithful). force_af upgrades bilinear samplers to 16x anisotropic filtering for crisper textures at oblique angles (visual only).</string></property>
+            <item><property name="text"><string>game</string></property></item>
+            <item><property name="text"><string>force_af</string></property></item>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -544,6 +580,19 @@
           <item row="1" column="1">
            <widget class="QCheckBox" name="checkBox_shader_cache_enabled">
             <property name="toolTip"><string>Save and reuse compiled Vulkan pipelines (_PipelineCache/&lt;game&gt;.bin). Removes most first-run shader stutter. Disable only to reproduce shader-related bugs.</string></property>
+            <property name="text"><string/>
+            </property>
+            <property name="checked"><bool>true</bool></property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_shader_cache_async_save">
+            <property name="text"><string>Crash-safe cache checkpoints:</string></property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QCheckBox" name="checkBox_shader_cache_async_save">
+            <property name="toolTip"><string>Every 2 minutes the compiled pipeline cache is checkpointed to disk from a background thread. If the game crashes you keep all shaders compiled so far instead of starting cold on the next run.</string></property>
             <property name="text"><string/>
             </property>
             <property name="checked"><bool>true</bool></property>

@@ -22,11 +22,14 @@ QVariantMap Configuration::GameSettings() const {
         KYTY_CFG_SET(speed_2x_enabled);
         KYTY_CFG_SET(frame_skip_count);
         KYTY_CFG_SET(upscaling_filter);
+        KYTY_CFG_SET(upscaling_sharpness);
+        KYTY_CFG_SET(texture_filtering);
         KYTY_CFG_SET(aspect_ratio);
         KYTY_CFG_SET(max_queued_frames);
         KYTY_CFG_SET(audio_output_device);
         KYTY_CFG_SET(master_volume);
         KYTY_CFG_SET(shader_cache_enabled);
+        KYTY_CFG_SET(shader_cache_async_save);
         KYTY_CFG_SET(thread_affinity);
         KYTY_CFG_SET(splash_enabled);
         KYTY_CFG_SET(vr_enabled);
@@ -92,6 +95,14 @@ void Configuration::ReadGameSettingsValues(const Settings& s) {
             upscaling_filter != "fsr" && upscaling_filter != "scaleforce") {
                 upscaling_filter = "bilinear";
         }
+        upscaling_sharpness = s.value("upscaling_sharpness", upscaling_sharpness).toInt();
+        if (upscaling_sharpness < 0 || upscaling_sharpness > 100) {
+                upscaling_sharpness = 80;
+        }
+        texture_filtering = s.value("texture_filtering", texture_filtering).toString();
+        if (texture_filtering != "game" && texture_filtering != "force_af") {
+                texture_filtering = "game";
+        }
         aspect_ratio = s.value("aspect_ratio", aspect_ratio).toString();
         if (aspect_ratio != "stretch" && aspect_ratio != "16:9" && aspect_ratio != "16:10" &&
             aspect_ratio != "4:3" && aspect_ratio != "21:9") {
@@ -107,6 +118,7 @@ void Configuration::ReadGameSettingsValues(const Settings& s) {
                 master_volume = 100;
         }
         shader_cache_enabled = s.value("shader_cache_enabled", shader_cache_enabled).toBool();
+        shader_cache_async_save = s.value("shader_cache_async_save", shader_cache_async_save).toBool();
         thread_affinity      = s.value("thread_affinity", thread_affinity).toString();
         splash_enabled       = s.value("splash_enabled", splash_enabled).toBool();
         vr_enabled           = s.value("vr_enabled", vr_enabled).toBool();

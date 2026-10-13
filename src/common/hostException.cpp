@@ -154,6 +154,28 @@ static int FindFaultingBaseRegister(const uint8_t* code) {
         return rm | (rex_b ? 0x08 : 0x00);
 }
 
+// True when [address, address+size) lies entirely within a committed,
+// readable region. Guards byte-walking the faulting instruction inside the
+// vectored handler: faulting again inside a VEH is fatal on Windows.
+static bool IsRangeReadable(const void* address, size_t size) {
+        if (address == nullptr) {
+                return false;
+        }
+        MEMORY_BASIC_INFORMATION mbi {};
+        if (VirtualQuery(address, &mbi, sizeof(mbi)) == 0) {
+                return false;
+        }
+        if (mbi.State != MEM_COMMIT ||
+            (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0 ||
+            (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
+                            PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) == 0) {
+                return false;
+        }
+        const auto* ptr        = static_cast<const uint8_t*>(address);
+        const auto* region_end = static_cast<const uint8_t*>(mbi.BaseAddress) + mbi.RegionSize;
+        return ptr + size <= region_end;
+}
+
 static LONG WINAPI ExceptionFilter(PEXCEPTION_POINTERS exception) noexcept {
         auto* exception_record = exception->ExceptionRecord;
 
@@ -200,7 +222,7 @@ static LONG WINAPI ExceptionFilter(PEXCEPTION_POINTERS exception) noexcept {
             info.access_violation_vaddr < 0x10000ull &&
             info.access_violation_vaddr != 0) {
                 const uint8_t* code = reinterpret_cast<const uint8_t*>(info.exception_address);
-                int base_reg = FindFaultingBaseRegister(code);
+                int base_reg = IsRangeReadable(code, 15) ? FindFaultingBaseRegister(code) : -1;
                 if (base_reg >= 0 && base_reg < 16 && base_reg != 4) {  // skip RSP
                         auto* ctx = exception->ContextRecord;
                         uint64_t* regs[] = {

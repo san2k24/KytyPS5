@@ -2,6 +2,7 @@
 
 #include "common/assert.h"
 #include "common/logging/log.h"
+#include "common/emulatorConfig.h"
 #include "graphics/guest_gpu/gpu_defs.h"
 #include "graphics/host_gpu/renderer/renderContext.h"
 
@@ -59,6 +60,18 @@ vk::Sampler SamplerCache::GetSampler(const ShaderSamplerResource& r, bool intege
 			// Reserved encodings 5-7 fall back to the maximum ratio.
 			default: aniso_ratio = 16.0f; break;
 		}
+	}
+	else if (Config::GetTextureFiltering() == "force_af" &&
+	         static_cast<Prospero::SamplerFilter>(mag_filter) !=
+	                 Prospero::SamplerFilter::kPoint &&
+	         static_cast<Prospero::SamplerFilter>(min_filter) !=
+	                 Prospero::SamplerFilter::kPoint &&
+	         !r.ForceUnormCoords() && r.DepthCompareFunc() == 0) {
+		// Forced anisotropic filtering: upgrade the game's bilinear samplers to
+		// 16x AF for crisper textures at oblique angles. Purely visual; compare
+		// and unorm-coordinates samplers are left untouched because they serve
+		// non-color purposes.
+		aniso_ratio = 16.0f;
 	}
 
 	const auto mip_filter = r.MipFilter();
@@ -128,8 +141,9 @@ vk::Sampler SamplerCache::GetSampler(const ShaderSamplerResource& r, bool intege
         static_cast<float>(static_cast<int16_t>((r.LodBias() ^ 0x2000u) - 0x2000u)) / 256.0f,
         -max_lod_bias, max_lod_bias
     );
-	sampler_info.anisotropyEnable        = (aniso ? VK_TRUE : VK_FALSE);
-	sampler_info.maxAnisotropy           = aniso_ratio;
+	sampler_info.anisotropyEnable = ((aniso || aniso_ratio > 1.0f) ? VK_TRUE : VK_FALSE);
+	sampler_info.maxAnisotropy = std::min(
+	    aniso_ratio, m_graphics.GetPhysicalDeviceProperties().limits.maxSamplerAnisotropy);
 	sampler_info.compareEnable           = (r.DepthCompareFunc() != 0 ? VK_TRUE : VK_FALSE);
 	sampler_info.compareOp               = static_cast<vk::CompareOp>(r.DepthCompareFunc());
 	sampler_info.minLod                  = min_lod;

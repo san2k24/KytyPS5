@@ -71,6 +71,16 @@ struct ConfigOptions {
         // (smooth), "bicubic" (sharper smooth), "integer" (pixel-perfect,
         // only when host resolution is an integer multiple of guest).
         std::string            upscaling_filter             = "bilinear";
+        // FSR1 RCAS sharpening strength applied after the upscaling filter
+        // (fsr/scaleforce/bicubic only). 0 disables the RCAS pass entirely;
+        // 100 is the maximum sharpness. Default 80 approximates the AMD
+        // FidelityFX recommended default.
+        uint32_t               upscaling_sharpness          = 80;
+        // Texture filtering override for guest samplers: "game" keeps the
+        // exact sampler state programmed by the game (faithful), "force_af"
+        // forces 16x anisotropic filtering on non-compare samplers (crisper
+        // textures at oblique angles, visual-only change).
+        std::string            texture_filtering            = "game";
         // PPSSPP-style 2x speed toggle: when true, the present thread fires 2
         // vblanks for every rendered frame, making the game logic advance at
         // 2x the configured vblank frequency (i.e. 120 Hz with the default 60
@@ -107,6 +117,10 @@ struct ConfigOptions {
         // compilation stutter. Disabling it forces recompilation every run
         // (useful to reproduce shader-related bugs).
         bool                   shader_cache_enabled         = true;
+        // When true (and the shader cache is enabled), the pipeline cache is
+        // also saved periodically during gameplay from a background thread and
+        // on every crash-safe checkpoint, so warm runs survive emulated crashes.
+        bool                   shader_cache_async_save      = true;
         // Host CPU cores the emulator may run on. Empty means no restriction.
         // Accepted forms: "0-7", "0,2,4", "0-3,8,9" (same core list as
         // Windows processor affinity masks; 0 <= core < 64).
@@ -160,6 +174,8 @@ bool     AmdCpuEnabled();
 uint32_t GetVblankFrequency();
 bool     VblankCatchupEnabled();
 const std::string& GetUpscalingFilter();
+uint32_t GetUpscalingSharpness();
+const std::string& GetTextureFiltering();
 bool     Speed2xEnabled();
 uint32_t GetFrameSkipCount();
 const std::string& GetAspectRatio();
@@ -167,6 +183,7 @@ uint32_t GetMaxQueuedFrames();
 const std::string& GetAudioOutputDevice();
 uint32_t GetMasterVolume();
 bool     ShaderCacheEnabled();
+bool     ShaderCacheAsyncSaveEnabled();
 const std::string& GetCpuAffinity();
 uint32_t GetConsoleLanguage();
 bool     VulkanValidationEnabled();

@@ -158,6 +158,9 @@ ConfigurationEditDialog::ConfigurationEditDialog(Configuration& info, QWidget* p
         connect(m_ui->slider_master_volume, &QSlider::valueChanged, this, [this](int value) {
                 m_ui->label_master_volume_value->setText(tr("%1%").arg(value));
         });
+        connect(m_ui->slider_upscale_sharpness, &QSlider::valueChanged, this, [this](int value) {
+                m_ui->label_upscale_sharpness_value->setText(tr("%1%").arg(value));
+        });
         connect(m_ui->comboBox_shader_log_direction, &QComboBox::currentTextChanged, this,
                 [this](const QString& text) {
                         auto log = TextToEnum<Configuration::LogDirection>(text);
@@ -326,6 +329,11 @@ void ConfigurationEditDialog::Init(const Configuration& info) {
         m_ui->checkBox_gpu_assisted_validation->setChecked(info.gpu_assisted_validation_enabled);
         const int upscaling_idx = m_ui->comboBox_upscaling_filter->findText(info.upscaling_filter);
         m_ui->comboBox_upscaling_filter->setCurrentIndex(upscaling_idx >= 0 ? upscaling_idx : 0);
+        m_ui->slider_upscale_sharpness->setValue(info.upscaling_sharpness);
+        m_ui->label_upscale_sharpness_value->setText(tr("%1%").arg(info.upscaling_sharpness));
+        const int texture_idx = m_ui->comboBox_texture_filtering->findText(info.texture_filtering);
+        m_ui->comboBox_texture_filtering->setCurrentIndex(texture_idx >= 0 ? texture_idx : 0);
+        m_ui->checkBox_shader_cache_async_save->setChecked(info.shader_cache_async_save);
         m_ui->comboBox_console_language->clear();
         m_ui->comboBox_console_language->addItems(CONSOLE_LANGUAGE_NAMES);
         m_ui->comboBox_console_language->setCurrentIndex(
@@ -492,10 +500,13 @@ static void UpdateInfo(Configuration& info, Ui::ConfigurationEditDialog& ui, boo
         info.speed_2x_enabled         = ui.checkBox_speed_2x_enabled->isChecked();
         info.frame_skip_count         = ui.spinBox_frame_skip_count->value();
         info.upscaling_filter         = ui.comboBox_upscaling_filter->currentText();
+        info.upscaling_sharpness      = ui.slider_upscale_sharpness->value();
+        info.texture_filtering        = ui.comboBox_texture_filtering->currentText();
         info.aspect_ratio             = ui.comboBox_aspect_ratio->currentText();
         info.max_queued_frames        = ui.spinBox_max_queued_frames->value();
         info.master_volume            = ui.slider_master_volume->value();
         info.shader_cache_enabled     = ui.checkBox_shader_cache_enabled->isChecked();
+        info.shader_cache_async_save  = ui.checkBox_shader_cache_async_save->isChecked();
         info.thread_affinity          = ui.lineEdit_thread_affinity->text().trimmed();
         info.splash_enabled           = ui.checkBox_splash_enabled->isChecked();
         info.vr_enabled               = ui.checkBox_vr_enabled->isChecked();

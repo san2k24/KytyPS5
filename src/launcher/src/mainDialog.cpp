@@ -263,6 +263,8 @@ static QStringList CreateEmulatorArgs(const Configuration& info) {
         args << "--speed-2x" << BoolArg(info.speed_2x_enabled);
         args << "--frame-skip" << QString::number(info.frame_skip_count);
         args << "--upscaling-filter" << info.upscaling_filter;
+        args << "--upscaling-sharpness" << QString::number(info.upscaling_sharpness);
+        args << "--texture-filtering" << info.texture_filtering;
         args << "--console-language" << QString::number(info.console_language);
         args << "--vulkan-validation" << BoolArg(info.vulkan_validation_enabled);
         args << "--shader-validation" << BoolArg(info.shader_validation_enabled);
@@ -295,6 +297,7 @@ static QStringList CreateEmulatorArgs(const Configuration& info) {
         }
         args << "--master-volume" << QString::number(info.master_volume);
         args << "--shader-cache" << BoolArg(info.shader_cache_enabled);
+        args << "--shader-cache-async-save" << BoolArg(info.shader_cache_async_save);
         if (!info.thread_affinity.isEmpty()) {
                 args << "--thread-affinity" << info.thread_affinity;
         }

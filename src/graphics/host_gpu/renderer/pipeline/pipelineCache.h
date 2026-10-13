@@ -9,9 +9,11 @@
 #include "graphics/shader/shader.h"
 
 #include <cstddef>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <span>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 
@@ -106,6 +108,9 @@ public:
 	~PipelineCache();
 	KYTY_CLASS_NO_COPY(PipelineCache);
 	void Save();
+	// Periodic crash-safe checkpoint of the driver pipeline cache (see
+	// MaybeSave in the .cpp). Cheap no-op unless the interval elapsed.
+	void MaybeSave();
 
 	struct Pipeline {
 		vk::PipelineLayout      pipeline_layout       = nullptr;
@@ -173,6 +178,10 @@ private:
 	std::unique_ptr<ProgramCache> m_program_cache;
 	vk::PipelineCache             m_driver_cache = nullptr;
 	std::filesystem::path         m_driver_cache_path;
+	// Background writer used by MaybeSave checkpoints.
+	Common::Mutex                 m_save_worker_mutex;
+	std::thread                   m_save_worker;
+	std::chrono::steady_clock::time_point m_last_periodic_save {};
 	std::unordered_map<GraphicsPipelineKey, std::unique_ptr<Pipeline>, GraphicsPipelineKeyHash>
 	                                                        m_graphics_pipelines;
 	std::unordered_map<uint64_t, std::unique_ptr<Pipeline>> m_compute_pipelines;

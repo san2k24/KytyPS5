@@ -327,6 +327,7 @@ add_gpu_blit_shader(gpu_imgui_hdr gpu_video_out_overlay.frag -DIMGUI_HDR=1)
 add_gpu_blit_shader(gpu_upscale_fsr gpu_upscale_fsr.frag)
 add_gpu_blit_shader(gpu_upscale_scaleforce gpu_upscale_scaleforce.frag)
 add_gpu_blit_shader(gpu_upscale_bicubic gpu_upscale_bicubic.frag)
+add_gpu_blit_shader(gpu_sharpen_rcas gpu_sharpen_rcas.frag)
 list(APPEND kyty_emulator_src ${gpu_blit_shader_headers})
 
 list(APPEND kyty_emulator_src
