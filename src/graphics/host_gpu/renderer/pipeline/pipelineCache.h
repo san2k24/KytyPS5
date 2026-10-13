@@ -4,6 +4,7 @@
 #include "common/abi.h"
 #include "common/assert.h"
 #include "common/common.h"
+#include "common/threads.h"
 #include "graphics/host_gpu/renderer/renderTarget.h"
 #include "graphics/host_gpu/vulkanCommon.h"
 #include "graphics/shader/shader.h"
@@ -187,6 +188,10 @@ private:
 	std::unordered_map<uint64_t, std::unique_ptr<Pipeline>> m_compute_pipelines;
 
 	void InitializeDriverCache();
+
+	// Writes the current driver cache contents to disk without
+	// invalidating them (Save() destroys the cache afterwards).
+	[[nodiscard]] bool WriteDriverCache();
 };
 
 void LogPipelineTrace(const char* phase, uint64_t vertex_program_id, uint64_t pixel_program_id);
