@@ -327,7 +327,7 @@ private:
         // the RCAS pass samples it. Owned here (not per-frame) because it is
         // only needed when sharpening is enabled and tracks the swapchain
         // extent/format.
-        Image                          m_sharpen_image {};
+        VulkanImage                    m_sharpen_image {};
         vk::ImageView                  m_sharpen_view        = nullptr;
         // Last known state of the intermediate target for explicit barriers.
         vk::PipelineStageFlags2        m_sharpen_stage       = vk::PipelineStageFlagBits2::eTopOfPipe;
@@ -1192,7 +1192,7 @@ bool Swapchain::EnsureSharpenTarget() {
 
         const auto features = graphics.GetFormatProperties(m_format).optimalTilingFeatures;
         const auto required = vk::FormatFeatureFlagBits::eColorAttachment |
-                              vk::FormatFeatureFlagBits::eSampled;
+                              vk::FormatFeatureFlagBits::eSampledImage;
         if ((features & required) != required) {
                 static std::atomic_bool warned {false};
                 if (!warned.exchange(true)) {
