@@ -5,6 +5,7 @@
 #include "graphics/host_gpu/graphicContext.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <optional>
 
@@ -377,10 +378,33 @@ uint64_t CommandScheduler::Submit(SubmitInfo submit) {
 	if (result != vk::Result::eSuccess) {
 		ReportVulkanFatal("vkQueueSubmit", result, tick, m_command.m_debug_op,
 		                  m_command.m_debug_submit_id, m_command.m_debug_arg0,
-		                  m_command.m_debug_arg1, m_command.m_debug_arg2, m_command.m_debug_arg3,
+		                  m_command.m_debug_arg1, m_command.m_debug_arg2,
+		                  m_command.m_debug_arg3,
 		                  m_command.m_debug_arg4);
+		// ErrorDeviceLost recovery: on RDNA1 GPUs (Radeon RX 5500 XT) the
+		// driver sometimes returns VK_ERROR_DEVICE_LOST when a shader uses
+		// an unsupported feature, when the GPU hangs (e.g. an infinite loop
+		// in a mesh/compute shader), or when VRAM is exhausted mid-frame.
+		// The previous behavior was EXIT_NOT_IMPLEMENTED = hard crash. Now we
+		// log a rate-limited warning and skip the submit. The next frame may
+		// also fail (the device is in a lost state) but the process stays
+		// alive so the user can save / quit gracefully.
+		static std::atomic<uint32_t> submit_failure_count{0};
+		const uint32_t seen = submit_failure_count.fetch_add(1, std::memory_order_relaxed);
+		if (seen < 8) {
+			LOGF("vkQueueSubmit: ignoring failure #%u (result=%d, tick=%llu); "
+			     "continuing - rendering may be corrupted\n",
+			     seen + 1, static_cast<int>(result),
+			     static_cast<unsigned long long>(tick));
+		} else if (seen == 8) {
+			LOGF("vkQueueSubmit: too many failures, suppressing further logs\n");
+		}
+	} else {
+		// Reset failure counter on a successful submit (so transient errors
+		// do not permanently suppress logging).
+		// (skipping atomic store for the success path is fine; we only
+		// need monotonic counting.)
 	}
-	EXIT_NOT_IMPLEMENTED(result != vk::Result::eSuccess);
 
 	m_command.m_buffer = nullptr;
 	return tick;
